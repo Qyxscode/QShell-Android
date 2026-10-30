@@ -27,11 +27,20 @@ android {
         versionName = flutter.versionName
     }
 
+    // 固定签名：保证本地与 CI 构建的 APK 可互相覆盖安装。
+    // keystore 随仓库提交，仅用于自建分发，不用于应用商店。
+    signingConfigs {
+        create("qshell") {
+            storeFile = file("qshell.jks")
+            storePassword = "qshell123"
+            keyAlias = "qshell"
+            keyPassword = "qshell123"
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("qshell")
         }
     }
 
