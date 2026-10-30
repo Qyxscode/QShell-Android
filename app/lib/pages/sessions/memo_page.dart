@@ -36,7 +36,15 @@ class _MemoPageState extends State<MemoPage> {
   }
 
   Future<void> _save(List<QShellMemoGroup> groups) async {
-    await _store.saveMemos(groups);
+    try {
+      await _store.saveMemos(groups);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text('保存失败：$e')));
+      return;
+    }
     if (!mounted) return;
     setState(() => _groups = groups);
   }

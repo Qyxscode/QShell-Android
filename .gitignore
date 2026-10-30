@@ -37,3 +37,7 @@ tools/bin/
 # 系统
 .DS_Store
 Thumbs.db
+
+# 内部文档（不进公开仓库）
+REQ-ANDROID.md
+SPIKE-REPORT.md

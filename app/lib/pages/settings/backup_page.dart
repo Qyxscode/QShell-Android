@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../design/tokens.dart';
 import '../../i18n/app_strings.dart';
+import '../../services/download_helper.dart';
 import '../../services/files/remote_fs.dart';
 import '../../services/qshell_config.dart';
 import '../../services/tools/webdav_client.dart';
@@ -151,6 +153,30 @@ class _BackupPageState extends State<BackupPage> {
       setState(() {
         _busy = false;
         _error = AppStrings.of(context).backupFailedTemplate.replaceAll('{msg}', '$e');
+      });
+    }
+  }
+
+  /// 把远端备份下载到手机（不恢复，仅保存文件）
+  Future<void> _download(WebdavEntry entry) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final bytes = await _client().download(entry.href);
+      final path = await DownloadHelper.saveBytes(
+        entry.name,
+        Uint8List.fromList(bytes),
+      );
+      if (!mounted) return;
+      setState(() => _busy = false);
+      _toast('已保存到 $path');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = '下载失败：$e';
       });
     }
   }
@@ -333,9 +359,23 @@ class _BackupPageState extends State<BackupPage> {
                           style: text.labelSmall
                               ?.copyWith(color: tokens.textSecondary),
                         ),
-                        trailing: TextButton(
-                          onPressed: () => _restore(file),
-                          child: Text(AppStrings.of(context).backupRestoreBtn),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: '下载到手机',
+                              onPressed:
+                                  _busy ? null : () => _download(file),
+                              icon: const Icon(
+                                  Icons.download_rounded,
+                                  size: 20),
+                            ),
+                            TextButton(
+                              onPressed: () => _restore(file),
+                              child: Text(AppStrings.of(context)
+                                  .backupRestoreBtn),
+                            ),
+                          ],
                         ),
                       ),
                     ),
