@@ -1,0 +1,38 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.g.dart
+
+# Android
+app/android/.gradle/
+app/android/local.properties
+app/android/captures/
+app/android/app/build/
+app/android/app/.cxx/
+app/android/**/build/
+app/build/
+app/.dart_tool/
+*.jks
+*.keystore
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 本地产物与日志
+logs/
+dist/*.apk
+icon-build/
+spike-*/
+tools/perl5/
+tools/bin/
+
+# 系统
+.DS_Store
+Thumbs.db
