@@ -12,6 +12,8 @@ import '../../design/tokens.dart';
 import '../../i18n/app_strings.dart';
 import '../../services/terminal_registry.dart';
 import '../../services/qshell_config.dart';
+
+import 'memo_page.dart';
 import '../../services/ssh_connector.dart';
 import '../../state/theme_controller.dart';
 import '../../state/theme_scope.dart';
@@ -381,18 +383,35 @@ class _TerminalPageState extends State<TerminalPage> {
             maxChildSize: 0.9,
             minChildSize: 0.3,
             builder: (context, scrollController) => ListView(
-              controller: scrollController,
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    AppStrings.of(context).termMemoSheetTitle,
-                    style: text.labelMedium?.copyWith(
-                      color: tokens.textSecondary,
-                      fontWeight: FontWeight.w600,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        AppStrings.of(context).termMemoSheetTitle,
+                        style: text.labelMedium?.copyWith(
+                          color: tokens.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                  ),
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const MemoPage(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.add_rounded, size: 16),
+                      label: const Text('新建'),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ],
                 ),
                 for (final group in groups.where((g) => g.items.isNotEmpty)) ...[
                   Padding(

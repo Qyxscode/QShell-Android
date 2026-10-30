@@ -131,6 +131,9 @@ class QShellGroup {
 class QShellConfigStore {
   static const _kKey = 'qshell.config_json';
 
+  /// 桌面版 managed_hosts（主机管理）在手机端的展示分组名
+  static const String managedGroupName = '主机管理';
+
   // ---------- 读取 ----------
 
   Future<List<QShellGroup>> load() async {
@@ -471,7 +474,51 @@ class QShellConfigStore {
         );
       }
       if (hosts.isEmpty) continue;
+      if (hosts.isEmpty) continue;
       groups.add(QShellGroup(name: resolvedGroup, hosts: hosts));
+    }
+
+    // 桌面版没规定 devices 与 managed_hosts 互斥，同一台主机可能两边都有。
+    // 用 host:port 去重，避免同一台机器在列表里出现两次。
+    final seen = <String>{
+      for (final group in groups)
+        for (final host in group.hosts) '${host.host}:${host.port}',
+    };
+    // 这里把它作为额外分组追加，命名为「主机管理」，只读展示。
+    final managed = map['managed_hosts'];
+    if (managed is List && managed.isNotEmpty) {
+      final hosts = <QShellHost>[];
+      for (final h in managed) {
+        if (h is! Map) continue;
+        final host = (h['host'] as String?)?.trim();
+        if (host == null || host.isEmpty) continue;
+        final port = (h['port'] as num?)?.toInt() ?? 22;
+        if (!seen.add('$host:$port')) continue;
+        hosts.add(
+          QShellHost(
+            name: (h['name'] as String?)?.trim().isNotEmpty == true
+                ? h['name'] as String
+                : host,
+            protocol: (h['protocol'] as String?) ?? 'ssh',
+            host: host,
+            port: (h['port'] as num?)?.toInt() ?? 22,
+            user: (h['user'] as String?) ?? '',
+            password: (h['pwd'] as String?) ?? '',
+            keyPath: h['key_path'] as String?,
+            passphrase: h['passphrase'] as String?,
+            group: managedGroupName,
+            proxyHost: (h['proxy_host'] as String?)?.trim(),
+            proxyPort: (h['proxy_port'] as num?)?.toInt(),
+            proxyUser: (h['proxy_user'] as String?)?.trim(),
+            proxyPwd: h['proxy_pwd'] as String?,
+            proxyKey: h['proxy_key'] as String?,
+            proxyPassphrase: h['proxy_passphrase'] as String?,
+          ),
+        );
+      }
+      if (hosts.isNotEmpty) {
+        groups.add(QShellGroup(name: managedGroupName, hosts: hosts));
+      }
     }
     return groups;
   }

@@ -46,7 +46,7 @@ class WebdavClient {
   /// 内部一律用「相对 baseUrl 的路径」（'' 表示根），
   /// 这里再拼回完整 URL，并用 pathSegments 让中文等字符正确编码。
   Uri _resolve(String relativePath) {
-    final base = Uri.parse(baseUrl);
+    final base = Uri.parse(_normalizeBase(baseUrl));
     final baseSegments =
         base.pathSegments.where((segment) => segment.isNotEmpty).toList();
     final segments =
@@ -61,14 +61,52 @@ class WebdavClient {
 
   /// 把服务器返回的 href（可能是完整 URL、带 BaseURL 的绝对路径、相对路径）
   /// 统一转成相对 baseUrl 的路径（已解码）。
+  /// 把用户填的地址规整成可解析的 URI（非法百分号按普通字符处理）。
+  static String _normalizeBase(String raw) {
+    final trimmed = raw.trim();
+    try {
+      Uri.parse(trimmed);
+      return trimmed;
+    } catch (_) {
+      // 逐段编码后再拼回去
+      final uri = Uri.tryParse(Uri.encodeFull(trimmed));
+      return uri?.toString() ?? trimmed;
+    }
+  }
+
+  static String _safeDecode(String value) {
+    try {
+      return Uri.decodeComponent(value);
+    } catch (_) {
+      return value;
+    }
+  }
+
+  /// 用服务器返回的 href 构造下载/读取 URL。
+  ///
+  /// WebDAV 的 href 通常相对**服务器根**（如 `/dir/a.zip`），
+  /// 而 baseUrl 可能自带子目录（如 `https://host/dav`）。
+  /// 直接拿 href 的绝对路径替换 base 的 path，避免 `dav/dav/a.zip` 这种重复拼接。
+  Uri uriOf(String href) {
+    final raw = href.trim();
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      return Uri.parse(raw);
+    }
+    final base = Uri.parse(_normalizeBase(baseUrl));
+    final decoded = _safeDecode(raw);
+    final absolute = decoded.startsWith('/') ? decoded : '/$decoded';
+    return base.replace(path: absolute, query: null);
+  }
+
   String relativePathOf(String href) {
     var path = href.trim();
     if (path.startsWith('http://') || path.startsWith('https://')) {
       path = Uri.parse(path).path;
     }
-    path = Uri.decodeComponent(path);
+    // href 可能含非法百分号（如文件名带 %），解码失败就用原串
+    path = _safeDecode(path);
 
-    final base = Uri.parse(baseUrl);
+    final base = Uri.parse(_normalizeBase(baseUrl));
     final basePath = base.path;
     final baseWithSlash = basePath.endsWith('/') ? basePath : '$basePath/';
     final baseNoSlash =
@@ -181,6 +219,25 @@ class WebdavClient {
   }
 
   DateTime? _parseHttpDate(String value) => _parseDate(value);
+
+  /// 按 href 直接下载（href 相对服务器根，避免 base 子目录重复拼接）
+  Future<Uint8List> downloadHref(String href) =>
+      downloadUri(uriOf(href));
+
+  Future<Uint8List> downloadUri(Uri uri) async {
+    final client = http.Client();
+    try {
+      final request = http.Request('GET', uri)
+        ..headers.addAll(_authHeaders);
+      final streamed = await client.send(request).timeout(_timeout);
+      if (streamed.statusCode >= 400) {
+        throw Exception('下载失败：HTTP ${streamed.statusCode}（$uri）');
+      }
+      return await streamed.stream.toBytes();
+    } finally {
+      client.close();
+    }
+  }
 
   Future<Uint8List> download(
     String path, {

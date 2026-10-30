@@ -36,6 +36,9 @@ class _BackupPageState extends State<BackupPage> {
   bool _busy = false;
   String? _error;
 
+  /// 远端目录返回的总条目数（诊断用）
+  int _remoteEntryCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -59,9 +62,8 @@ class _BackupPageState extends State<BackupPage> {
     _userCtrl.text = prefs.getString(_kUser) ?? '';
     _passCtrl.text = prefs.getString(_kPass) ?? '';
     setState(() => _loading = false);
-    if (_configured) {
-      await _loadFiles();
-    }
+    // 进入页面就拉一次远端列表，不必先点备份
+    await _loadFiles();
   }
 
   Future<void> _saveConfig() async {
@@ -88,6 +90,7 @@ class _BackupPageState extends State<BackupPage> {
     });
     try {
       final entries = await _client().list('');
+      _remoteEntryCount = entries.length;
       final backups = entries
           .where((entry) =>
               !entry.isDirectory && entry.name.toLowerCase().endsWith('.zip'))
@@ -146,7 +149,19 @@ class _BackupPageState extends State<BackupPage> {
           '_${two(now.hour)}${two(now.minute)}${two(now.second)}.zip';
       await _client().upload(name, bytes);
       if (!mounted) return;
-      _toast(AppStrings.of(context).backupDoneTemplate.replaceAll('{name}', name));
+      // 备份内容自检：让用户确认分组/连接/备忘录都进包了
+      final backupStore = QShellConfigStore();
+      final backupGroups = await backupStore.load();
+      final backupMemos = await backupStore.loadMemos();
+      final backupHosts = backupGroups.fold<int>(
+          0, (sum, group) => sum + group.hosts.length);
+      final backupMemoCount = backupMemos.fold<int>(
+          0, (sum, group) => sum + group.items.length);
+      if (!mounted) return;
+      _toast('已备份：$name\n'
+          '含 ${backupGroups.length} 分组 · $backupHosts 条连接 · '
+          '$backupMemoCount 条备忘录');
+      await _loadFiles();
       await _loadFiles();
     } catch (e) {
       if (!mounted) return;
@@ -164,7 +179,9 @@ class _BackupPageState extends State<BackupPage> {
       _error = null;
     });
     try {
-      final bytes = await _client().download(entry.href);
+      // href 是绝对路径，转成相对 baseUrl 的路径再请求，避免重复拼接
+      final client = _client();
+      final bytes = await client.downloadHref(entry.href);
       final path = await DownloadHelper.saveBytes(
         entry.name,
         Uint8List.fromList(bytes),
@@ -182,11 +199,29 @@ class _BackupPageState extends State<BackupPage> {
   }
 
   Future<void> _restore(WebdavEntry entry) async {
+    // 恢复前统计当前数据并留快照，避免手机端自建内容被静默覆盖
+    final store = QShellConfigStore();
+    final currentGroups = await store.load();
+    final currentMemos = await store.loadMemos();
+    final hostCount =
+        currentGroups.fold<int>(0, (sum, group) => sum + group.hosts.length);
+    final memoCount =
+        currentMemos.fold<int>(0, (sum, group) => sum + group.items.length);
+    if (!mounted) return;
+
+    final confirmText = AppStrings.of(context)
+        .backupRestoreConfirmTemplate
+        .replaceAll('{name}', entry.name);
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(AppStrings.of(context).backupRestoreTitle),
-        content: Text(AppStrings.of(context).backupRestoreConfirmTemplate.replaceAll('{name}', entry.name)),
+        content: Text(
+          '$confirmText\n\n'
+          '当前 $hostCount 个连接、$memoCount 条备忘录将被替换。\n'
+          '恢复前会自动保存一份当前配置快照。',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -201,12 +236,23 @@ class _BackupPageState extends State<BackupPage> {
     );
     if (ok != true || !mounted) return;
 
+    // 存快照（恢复失败或反悔时可找回）
+    try {
+      final snapshot = await store.exportRawJson();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('qshell.config.snapshot', snapshot);
+    } catch (_) {
+      // 快照失败不阻断恢复
+    }
+
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final bytes = await _client().download(entry.href);
+      // href 是绝对路径，转成相对 baseUrl 的路径再请求，避免重复拼接
+      final client = _client();
+      final bytes = await client.downloadHref(entry.href);
       final archive = ZipDecoder().decodeBytes(bytes);
       final configFile = archive.findFile('qshell_config.json') ??
           archive.findFile('config.json');
@@ -237,13 +283,26 @@ class _BackupPageState extends State<BackupPage> {
       }
 
       if (!mounted) return;
+      if (!mounted) return;
       setState(() => _busy = false);
-      _toast(AppStrings.of(context).backupRestoredTemplate.replaceAll('{g}', '$groupCount').replaceAll('{s}', '$restoredServers'));
+      // 统计恢复后的实际内容，避免只看到一个笼统的分组数
+      final store = QShellConfigStore();
+      final restored = await store.load();
+      final restoredMemos = await store.loadMemos();
+      final hostTotal =
+          restored.fold<int>(0, (sum, group) => sum + group.hosts.length);
+      final memoTotal =
+          restoredMemos.fold<int>(0, (sum, group) => sum + group.items.length);
+      if (!mounted) return;
+      _toast('已恢复 $groupCount 个分组 · $hostTotal 条连接 · '
+          '$memoTotal 条备忘录 · $restoredServers 个文件服务器');
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = AppStrings.of(context).backupRestoreFailedTemplate.replaceAll('{msg}', '$e');
+        _error = AppStrings.of(context)
+            .backupRestoreFailedTemplate
+            .replaceAll('{msg}', '$e');
       });
     }
   }
@@ -335,7 +394,7 @@ class _BackupPageState extends State<BackupPage> {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     child: Text(
-                      AppStrings.of(context).backupNoFiles,
+                      '${AppStrings.of(context).backupNoFiles}（远端共 $_remoteEntryCount 个条目）',
                       style: text.bodySmall
                           ?.copyWith(color: tokens.textSecondary),
                     ),

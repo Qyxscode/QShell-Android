@@ -49,7 +49,146 @@ class _MemoPageState extends State<MemoPage> {
     setState(() => _groups = groups);
   }
 
-  Future<void> _add() async {
+  /// 新建分组（与桌面端一致，允许空分组）
+  Future<void> _addGroup() async {
+    final name = await _askName(
+      title: '新建分组',
+      label: '分组名称',
+      initial: '新备忘组',
+    );
+    if (name == null || name.isEmpty || !mounted) return;
+    if (_groups.any((group) => group.group == name)) {
+      _toast('分组已存在');
+      return;
+    }
+    final groups = List<QShellMemoGroup>.of(_groups)
+      ..add(QShellMemoGroup(group: name, items: const <QShellMemo>[]));
+    await _save(groups);
+  }
+
+  Future<void> _renameGroup(int groupIndex) async {
+    final current = _groups[groupIndex].group;
+    final name = await _askName(
+      title: '重命名分组',
+      label: '新名称',
+      initial: current,
+    );
+    if (name == null || name.isEmpty || name == current || !mounted) return;
+    final groups = List<QShellMemoGroup>.of(_groups);
+    groups[groupIndex] = QShellMemoGroup(
+      group: name,
+      items: groups[groupIndex].items,
+    );
+    await _save(groups);
+  }
+
+  Future<void> _deleteGroup(int groupIndex) async {
+    final group = _groups[groupIndex];
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除分组'),
+        content: Text(
+          '「${group.group}」及其中的 ${group.items.length} 条命令将被删除，确定？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(AppStrings.of(context).commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(AppStrings.of(context).commonDelete),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final groups = List<QShellMemoGroup>.of(_groups)..removeAt(groupIndex);
+    await _save(groups);
+  }
+
+  void _groupActions(int groupIndex) {
+    final group = _groups[groupIndex];
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(group.group.isEmpty ? '未分组' : group.group),
+              subtitle: Text('${group.items.length} 条命令'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.add_rounded),
+              title: const Text('在此组新建命令'),
+              onTap: () {
+                Navigator.pop(context);
+                _add(groupName: group.group);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.drive_file_rename_outline_rounded),
+              title: const Text('重命名分组'),
+              onTap: () {
+                Navigator.pop(context);
+                _renameGroup(groupIndex);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded),
+              title: const Text('删除分组'),
+              onTap: () {
+                Navigator.pop(context);
+                _deleteGroup(groupIndex);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _askName({
+    required String title,
+    required String label,
+    required String initial,
+  }) async {
+    final controller = TextEditingController(text: initial);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(labelText: label),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(AppStrings.of(context).commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: Text(AppStrings.of(context).commonSave),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _add({String? groupName}) async {
     final result = await showDialog<_MemoDraft>(
       context: context,
       builder: (_) => _MemoDialog(
@@ -192,6 +331,11 @@ class _MemoPageState extends State<MemoPage> {
             onPressed: _add,
             icon: const Icon(Icons.add_rounded),
           ),
+          IconButton(
+            tooltip: '新建分组',
+            onPressed: _addGroup,
+            icon: const Icon(Icons.create_new_folder_outlined),
+          ),
         ],
       ),
       body: _loading
@@ -239,15 +383,28 @@ class _MemoPageState extends State<MemoPage> {
                       ),
                     ),
                     for (var g = 0; g < _groups.length; g++) ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
-                        child: Text(
-                          _groups[g].group.isEmpty
-                              ? AppStrings.of(context).memoNoGroup
-                              : _groups[g].group,
-                          style: text.labelMedium?.copyWith(
-                            color: tokens.textSecondary,
-                            fontWeight: FontWeight.w600,
+                      InkWell(
+                        onLongPress: () => _groupActions(g),
+                        onTap: () => _groupActions(g),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(4, 8, 4, 6),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _groups[g].group.isEmpty
+                                      ? AppStrings.of(context).memoNoGroup
+                                      : _groups[g].group,
+                                  style: text.labelMedium?.copyWith(
+                                    color: tokens.textSecondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              Icon(Icons.more_horiz_rounded,
+                                  size: 16, color: tokens.textDisabled),
+                            ],
                           ),
                         ),
                       ),

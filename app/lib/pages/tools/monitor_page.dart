@@ -103,7 +103,7 @@ class _MonitorPageState extends State<MonitorPage> {
     final all = <(String id, QShellHost host)>[];
     for (final group in groups) {
       for (final host in group.hosts) {
-        all.add(('cfg:${host.host}:${host.port}', host));
+        all.add(('cfg:${host.group}:${host.host}:${host.port}:${host.user}', host));
       }
     }
 
@@ -161,7 +161,7 @@ class _MonitorPageState extends State<MonitorPage> {
     final all = <(String id, QShellHost host)>[];
     for (final group in groups) {
       for (final host in group.hosts) {
-        all.add(('cfg:${host.host}:${host.port}', host));
+        all.add(('cfg:${host.group}:${host.host}:${host.port}:${host.user}', host));
       }
     }
     if (all.isEmpty) {
