@@ -23,6 +23,7 @@ class MetricCard extends StatelessWidget {
     this.pendingHint,
     this.onTap,
     this.chartHeight = 44,
+    this.bottomSpace = 0,
   });
 
   final IconData icon;
@@ -40,6 +41,9 @@ class MetricCard extends StatelessWidget {
   final String? pendingHint;
   final VoidCallback? onTap;
   final double chartHeight;
+
+  /// 卡片底部额外留白（用于把同类卡片拉高，统一视觉高度）
+  final double bottomSpace;
 
   bool get _pending => pendingHint != null;
   bool get _waterline => progress != null;
@@ -174,6 +178,7 @@ class MetricCard extends StatelessWidget {
                         color: accent,
                       ),
                     ],
+                    if (bottomSpace > 0) SizedBox(height: bottomSpace),
                   ],
                 ],
               ),

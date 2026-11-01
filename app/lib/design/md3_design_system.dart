@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'design_system.dart';
 
@@ -38,6 +39,13 @@ class Md3DesignSystem implements DesignSystem {
       extensions: <ThemeExtension<dynamic>>[tokens],
       appBarTheme: AppBarTheme(
         backgroundColor: tokens.background,
+        systemOverlayStyle: (brightness == Brightness.dark
+                ? SystemUiOverlayStyle.light
+                : SystemUiOverlayStyle.dark)
+            .copyWith(
+          statusBarColor: tokens.background,
+          systemNavigationBarColor: tokens.background,
+        ),
         foregroundColor: tokens.textPrimary,
         elevation: 0,
         scrolledUnderElevation: 0,

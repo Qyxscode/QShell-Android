@@ -448,10 +448,14 @@ class _MonitorPageState extends State<MonitorPage> {
                               ?.copyWith(color: tokens.textDisabled),
                         ),
                         const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: _chooseNodes,
-                          icon: const Icon(Icons.sync_rounded),
-                          label: Text(AppStrings.of(context).settingsReadList),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: _chooseNodes,
+                            child: Text(
+                              AppStrings.of(context).settingsReadList,
+                            ),
+                          ),
                         ),
                       ],
                     ),

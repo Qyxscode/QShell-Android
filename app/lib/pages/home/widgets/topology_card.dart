@@ -14,10 +14,32 @@ class TopologyCard extends StatelessWidget {
     super.key,
     required this.snapshot,
     this.onTapNode,
+    this.hideIps = false,
+    this.onTogglePrivacy,
   });
 
   final NetworkSnapshot snapshot;
   final void Function(String node)? onTapNode;
+
+  /// 隐私模式：IPv4 打码后两段，IPv6 打码后段
+  final bool hideIps;
+  final VoidCallback? onTogglePrivacy;
+
+  String _mask(String? value) {
+    if (value == null || value.isEmpty) return value ?? '';
+    return value.split('\n').map((line) {
+      final t = line.trim();
+      if (t.isEmpty) return line;
+      if (t.contains(':')) {
+        final parts = t.split(':');
+        if (parts.length <= 2) return '••••';
+        return '${parts[0]}:${parts[1]}:••••';
+      }
+      final parts = t.split('.');
+      if (parts.length != 4) return '••••';
+      return '${parts[0]}.${parts[1]}.••.••';
+    }).join('\n');
+  }
 
   bool get _isMobileOnly =>
       snapshot.kinds.contains(ConnectivityResult.mobile) &&
@@ -33,14 +55,16 @@ class TopologyCard extends StatelessWidget {
       _TopoRowData(
         key: 'local',
         title: strings.homeLocal,
-        value: snapshot.localIp ?? strings.commonNotObtained,
+        value: hideIps
+            ? _mask(snapshot.localIp ?? strings.commonNotObtained)
+            : (snapshot.localIp ?? strings.commonNotObtained),
         hint: snapshot.interfaceLabel,
       ),
       if (!_isMobileOnly)
         _TopoRowData(
           key: 'gateway',
           title: strings.homeUpstream,
-          value: _gatewayText(),
+          value: hideIps ? _mask(_gatewayText()) : _gatewayText(),
           hint: strings.homeDefaultGateway,
           multiline: true,
         ),
@@ -48,13 +72,15 @@ class TopologyCard extends StatelessWidget {
         _TopoRowData(
           key: 'direct',
           title: strings.homeDirectExit,
-          value: snapshot.directIp ?? strings.commonNotObtained,
+          value: hideIps
+              ? _mask(snapshot.directIp ?? strings.commonNotObtained)
+              : (snapshot.directIp ?? strings.commonNotObtained),
           hint: strings.homeDomesticLine,
         ),
       _TopoRowData(
         key: 'public',
         title: snapshot.viaProxy ? strings.homeProxyExit : strings.homePublic,
-        value: _publicText(),
+        value: hideIps ? _mask(_publicText()) : _publicText(),
         hint: snapshot.region,
         multiline: true,
       ),
@@ -78,6 +104,25 @@ class TopologyCard extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
+                if (onTogglePrivacy != null)
+                  GestureDetector(
+                    onTap: onTogglePrivacy,
+                    behavior: HitTestBehavior.opaque,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      child: Icon(
+                        hideIps
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        size: 18,
+                        color: hideIps ? tokens.accent : tokens.textSecondary,
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 2),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

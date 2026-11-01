@@ -145,6 +145,14 @@ class ThemeController extends ChangeNotifier {
     await prefs.setDouble(_kTerminalFontSize, next);
   }
 
+  Future<void> setDesignLanguage(DesignLanguage value) async {
+    if (_designLanguage == value) return;
+    _designLanguage = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kDesign, value.index);
+  }
+
   Future<void> setModeChoice(ThemeModeChoice value) async {
     if (_modeChoice == value) return;
     _modeChoice = value;

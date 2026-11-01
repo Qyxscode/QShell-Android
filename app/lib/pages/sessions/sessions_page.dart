@@ -154,17 +154,7 @@ class _SessionsPageState extends State<SessionsPage> {
       appBar: AppBar(
         title: Text(AppStrings.of(context).sessionsTitle),
         actions: [
-          IconButton(
-            tooltip: AppStrings.of(context).memoTitle,
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const MemoPage(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.sticky_note_2_outlined),
-          ),
+          // 顺序：新建连接 → 导入 → 备忘录 → 设置
           IconButton(
             tooltip: AppStrings.of(context).sessionsNew,
             onPressed: _addHost,
@@ -183,6 +173,17 @@ class _SessionsPageState extends State<SessionsPage> {
                     ),
                   )
                 : const Icon(Icons.file_open_outlined),
+          ),
+          IconButton(
+            tooltip: AppStrings.of(context).memoTitle,
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const MemoPage(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.sticky_note_2_outlined),
           ),
           const SettingsAction(),
         ],

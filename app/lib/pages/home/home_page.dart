@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../design/tokens.dart';
 import '../../services/network_info_service.dart';
@@ -45,6 +46,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int? _lastTrafficTotal;
   bool _permissionsRequested = false;
 
+
+  // 隐私模式：隐藏拓扑里的 IP，持久化到 prefs
+  static const String _kHideIps = 'home.hide_ips';
+  bool _hideIps = false;
+
+  Future<void> _loadHideIps() async {
+    final prefs = await SharedPreferences.getInstance();
+    final value = prefs.getBool(_kHideIps) ?? false;
+    if (!mounted) return;
+    setState(() => _hideIps = value);
+  }
+
+  Future<void> _togglePrivacy() async {
+    final next = !_hideIps;
+    setState(() => _hideIps = next);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kHideIps, next);
+  }
   // 每秒一个点，保留 10 分钟
   static const int _seriesLength = 600;
   final List<double> _wifiSeries = <double>[];
@@ -54,6 +73,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _loadHideIps();
     WidgetsBinding.instance.addObserver(this);
     _load();
     _ensurePermissions();
@@ -303,6 +323,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             TopologyCard(
               snapshot: snapshot ?? _emptySnapshot(),
               onTapNode: (node) => _openNode(node, strings),
+              hideIps: _hideIps,
+              onTogglePrivacy: _togglePrivacy,
             ),
             const SizedBox(height: 12),
             // 两张卡等高
@@ -320,7 +342,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       caption: _cellCaption(strings),
                       series: _cellSeries,
                       // 蜂窝有 0~100 上限：用水位表达绝对占比，比折线直观
-                      progress: cells.isEmpty ? 0.0 : cells.first.percent / 100,
+                      progress: _cellProgress(cells),
+                      bottomSpace: 30,
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute<void>(
                           builder: (_) => const CellularDetailPage(),
@@ -341,6 +364,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           : (wifi.ssid.isEmpty ? strings.homeSsidPermission : wifi.ssid),
                       series: _wifiSeries,
                       progress: (wifi?.level ?? 0) / 100,
+                      bottomSpace: 30,
                       onTap: () async {
                         // 没权限时点击先去授权，避免进去还是看不到设备
                         final granted = await SystemService.hasWifiPermission();
@@ -392,6 +416,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   String _fmtTime(DateTime t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}';
+
+  /// 水位：双卡取较弱那张的百分比
+  double _cellProgress(List<CellularInfo> cells) {
+    if (cells.isEmpty) return 0.0;
+    final weakest = cells.reduce((a, b) => a.percent <= b.percent ? a : b);
+    return weakest.percent / 100;
+  }
 
   String? _cellPercent() {
     if (_cells.isEmpty) return null;

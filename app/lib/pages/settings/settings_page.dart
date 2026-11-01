@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../design/design_switcher.dart';
 import '../../design/tokens.dart';
 import '../../i18n/app_strings.dart';
 import '../../services/download_helper.dart';
@@ -390,6 +391,32 @@ class _SettingsPageState extends State<SettingsPage> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                      // 设计语言：MD3 / 液态玻璃
+                      Text('设计语言',
+                          style: text.titleSmall
+                              ?.copyWith(color: tokens.textPrimary)),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<DesignLanguage>(
+                          showSelectedIcon: false,
+                          segments: const [
+                            ButtonSegment(
+                              value: DesignLanguage.md3,
+                              label: Text('MD3'),
+                            ),
+                            ButtonSegment(
+                              value: DesignLanguage.glass,
+                              label: Text('液态玻璃'),
+                            ),
+                          ],
+                          selected: <DesignLanguage>{widget.controller.designLanguage},
+                          onSelectionChanged: (values) {
+                            widget.controller.setDesignLanguage(values.first);
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 20),
                       Text(AppStrings.of(context).modeTitle,
                           style: text.titleSmall
                               ?.copyWith(color: tokens.textPrimary)),

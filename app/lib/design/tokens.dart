@@ -26,6 +26,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
     required this.warning,
     required this.danger,
     required this.track,
+    this.glass = false,
   });
 
   final Color background;
@@ -47,6 +48,9 @@ class AppTokens extends ThemeExtension<AppTokens> {
   final Color danger;
   final Color track;
 
+  /// 是否玻璃质感主题（卡片半透明 + 背景装饰 + 底栏模糊）
+  final bool glass;
+
   @override
   AppTokens copyWith({
     Color? background,
@@ -67,6 +71,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
     Color? warning,
     Color? danger,
     Color? track,
+    bool? glass,
   }) {
     return AppTokens(
       background: background ?? this.background,
@@ -87,6 +92,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
       warning: warning ?? this.warning,
       danger: danger ?? this.danger,
       track: track ?? this.track,
+      glass: glass ?? this.glass,
     );
   }
 
@@ -113,6 +119,7 @@ class AppTokens extends ThemeExtension<AppTokens> {
       warning: mix(warning, other.warning),
       danger: mix(danger, other.danger),
       track: mix(track, other.track),
+      glass: t < 0.5 ? glass : other.glass,
     );
   }
 

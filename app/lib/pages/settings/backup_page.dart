@@ -350,10 +350,14 @@ class _BackupPageState extends State<BackupPage> {
                 const SizedBox(height: 14),
                 SizedBox(
                   width: double.infinity,
-                  child: FilledButton.icon(
+                  // 全宽按钮用纯文字：FilledButton.icon 是整体居中，文字会偏右
+                  child: FilledButton(
                     onPressed: _busy ? null : _backup,
-                    icon: const Icon(Icons.cloud_upload_rounded),
-                    label: Text(_busy ? AppStrings.of(context).backupInProgress : AppStrings.of(context).backupDoNow),
+                    child: Text(
+                      _busy
+                          ? AppStrings.of(context).backupInProgress
+                          : AppStrings.of(context).backupDoNow,
+                    ),
                   ),
                 ),
                 if (_busy) ...[

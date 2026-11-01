@@ -543,13 +543,33 @@ class SystemChannel(private val activity: MainActivity) {
                 }
             }.take(12)
 
+            // 服务小区的信号强度比 SignalStrength.dbm 更能对上「这张卡」：
+            // 部分双卡 ROM 上 SignalStrength.level / dbm 返回的是默认卡的聚合值，
+            // 会让两张卡的读数完全同步。
+            val servingStrength = when (serving) {
+                is android.telephony.CellInfoNr -> serving.cellSignalStrength
+                is android.telephony.CellInfoLte -> serving.cellSignalStrength
+                is android.telephony.CellInfoWcdma -> serving.cellSignalStrength
+                is android.telephony.CellInfoGsm -> serving.cellSignalStrength
+                is android.telephony.CellInfoCdma -> serving.cellSignalStrength
+                else -> null
+            }
+            val servingDbm = servingStrength?.dbm
+            val servingLevel = servingStrength?.level ?: level
+
             out.add(
                 mapOf(
                     "slot" to (sub.simSlotIndex + 1),
                     "carrier" to (sub.carrierName?.toString() ?: ""),
-                    "level" to level,
-                    "percent" to cellularPercent(level, lte?.rsrp, nr?.ssRsrp),
-                    "dbm" to all.firstOrNull()?.dbm,
+                    "level" to servingLevel,
+                    "percent" to cellularPercent(
+                        servingLevel,
+                        lte?.rsrp
+                            ?: if (serving is android.telephony.CellInfoLte) servingDbm else null,
+                        nr?.ssRsrp
+                            ?: if (serving is android.telephony.CellInfoNr) servingDbm else null,
+                    ),
+                    "dbm" to (servingDbm ?: all.firstOrNull()?.dbm),
                     "rsrp" to lte?.rsrp,
                     "rsrq" to lte?.rsrq,
                     "sinr" to lte?.rssnr,

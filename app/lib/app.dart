@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'design/design_switcher.dart';
 import 'i18n/app_strings.dart';
@@ -50,6 +52,39 @@ class QShellApp extends StatelessWidget {
                   seed: effectiveSeed,
                 ),
                 themeMode: controller.themeMode,
+                // 不配这段，文本框长按的「复制/粘贴/全选」会走英文默认实现
+                locale: localeController.language == AppLanguage.zhHant
+                    ? const Locale('zh', 'TW')
+                    : const Locale('zh', 'CN'),
+                supportedLocales: const [
+                  Locale('zh', 'CN'),
+                  Locale('zh', 'TW'),
+                ],
+                localizationsDelegates: const [
+                  GlobalMaterialLocalizations.delegate,
+                  GlobalWidgetsLocalizations.delegate,
+                  GlobalCupertinoLocalizations.delegate,
+                ],
+                // 设计语言整体换皮肤，渐变过渡会露出中间态，直接瞬时切换
+                themeAnimationDuration: Duration.zero,
+                builder: (context, child) {
+                  // 状态栏/导航栏图标跟随主题反色，否则日间是白字看不见
+                  final isDark =
+                      Theme.of(context).brightness == Brightness.dark;
+                  final base =
+                      isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark;
+                  return AnnotatedRegion<SystemUiOverlayStyle>(
+                    value: base.copyWith(
+                      statusBarColor: Colors.transparent,
+                      systemNavigationBarColor: Colors.transparent,
+                      statusBarIconBrightness:
+                          isDark ? Brightness.light : Brightness.dark,
+                      systemNavigationBarIconBrightness:
+                          isDark ? Brightness.light : Brightness.dark,
+                    ),
+                    child: child ?? const SizedBox.shrink(),
+                  );
+                },
                 home: const AppShell(),
               ),
             ),

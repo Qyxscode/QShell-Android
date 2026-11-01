@@ -1,6 +1,9 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../design/glass_design_system.dart';
 import '../design/tokens.dart';
 import '../i18n/app_strings.dart';
 import '../pages/files/files_page.dart';
@@ -45,8 +48,24 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  /// 页面主体（玻璃主题下会被背景光斑包一层）
+  Widget _sheetBody() {
+    return ActivePage(
+      index: _index,
+      child: PageView(
+        controller: _controller,
+        onPageChanged: (value) => setState(() => _index = value),
+        physics: const ClampingScrollPhysics(),
+        children: [
+          for (final page in _pages) RepaintBoundary(child: page),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+
     final tokens = AppTokens.of(context);
     final strings = AppStrings.of(context);
     final labels = <String>[
@@ -76,16 +95,20 @@ class _AppShellState extends State<AppShell> {
       },
       child: Scaffold(
         extendBody: true,
-        body: ActivePage(
-          index: _index,
-          child: PageView(
-            controller: _controller,
-            onPageChanged: (value) => setState(() => _index = value),
-            physics: const ClampingScrollPhysics(),
-            children: [
-              for (final page in _pages) RepaintBoundary(child: page),
-            ],
-          ),
+        body: Stack(
+          children: [
+            // 背景层固定占位，切换主题时不改变 widget 结构，避免 PageView 重建导致白屏
+            Positioned.fill(
+              child: tokens.glass
+                  ? GlassBackdrop(
+                      accent: tokens.accent,
+                      brightness: Theme.of(context).brightness,
+                      child: const SizedBox.expand(),
+                    )
+                  : const SizedBox.expand(),
+            ),
+            Positioned.fill(child: _sheetBody()),
+          ],
         ),
         bottomNavigationBar: SafeArea(
           minimum: const EdgeInsets.fromLTRB(0, 0, 0, 10),
@@ -165,10 +188,16 @@ class _BottomBar extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final count = labels.length;
 
-    return Container(
+    final bar = Container(
       height: _height,
       decoration: BoxDecoration(
-        color: tokens.surfaceCard,
+        // 玻璃模式：日间白玻璃、夜间黑玻璃。
+        // 透明度压到很低，模糊后的内容要能看出轮廓，否则就是一块实色。
+        color: tokens.glass
+            ? (Theme.of(context).brightness == Brightness.dark
+                ? Colors.black.withValues(alpha: 0.12)
+                : Colors.white.withValues(alpha: 0.16))
+            : tokens.surfaceCard,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: tokens.outlineSoft),
         boxShadow: <BoxShadow>[
@@ -194,8 +223,19 @@ class _BottomBar extends StatelessWidget {
                 width: itemWidth,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: tokens.accentSoft,
+                    // 玻璃模式：高亮是淡色发光胶囊，不是实色块
+                    color: tokens.glass
+                        ? (Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white.withValues(alpha: 0.09)
+                            : tokens.accent.withValues(alpha: 0.12))
+                        : tokens.accentSoft,
                     borderRadius: BorderRadius.circular(16),
+                    border: tokens.glass
+                        ? Border.all(
+                            color: Colors.white.withValues(alpha: 0.10),
+                            width: 1,
+                          )
+                        : null,
                   ),
                 ),
               ),
@@ -212,25 +252,24 @@ class _BottomBar extends StatelessWidget {
                             AnimatedScale(
                               scale: i == index ? 1.0 : 0.94,
                               duration: const Duration(milliseconds: 220),
-                              curve: Curves.easeOut,
+                              curve: Curves.easeOutCubic,
                               child: Icon(
-                                i == index
-                                    ? iconsFilled[i]
-                                    : iconsOutlined[i],
+                                i == index ? iconsFilled[i] : iconsOutlined[i],
                                 size: 24,
                                 color: i == index
-                                    ? tokens.onAccentSoft
+                                    ? (tokens.glass ? tokens.accent : tokens.onAccentSoft)
                                     : tokens.textSecondary,
                               ),
                             ),
                             const SizedBox(height: 2),
                             AnimatedDefaultTextStyle(
                               duration: const Duration(milliseconds: 220),
-                              style: text.labelSmall!.copyWith(
+                              style: (text.labelSmall ??
+                                      const TextStyle(fontSize: 10))
+                                  .copyWith(
                                 fontSize: 10,
-                                height: 1.1,
                                 color: i == index
-                                    ? tokens.onAccentSoft
+                                    ? (tokens.glass ? tokens.accent : tokens.onAccentSoft)
                                     : tokens.textSecondary,
                                 fontWeight: i == index
                                     ? FontWeight.w600
@@ -247,6 +286,16 @@ class _BottomBar extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+
+    if (!tokens.glass) return bar;
+    // 玻璃模式：磨砂 + 半透明，让背景光斑透过来
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(22),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: bar,
       ),
     );
   }

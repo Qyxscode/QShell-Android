@@ -187,72 +187,100 @@ class _TrafficDetailPageState extends State<TrafficDetailPage> {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Text(
-                          '累计收 ${info == null ? "--" : _fmtBytes(info.rx)}',
-                          style: text.bodySmall
-                              ?.copyWith(color: tokens.textSecondary),
-                        ),
-                        const SizedBox(width: 14),
-                        Text(
-                          '累计发 ${info == null ? "--" : _fmtBytes(info.tx)}',
-                          style: text.bodySmall
-                              ?.copyWith(color: tokens.textSecondary),
-                        ),
-                      ],
+                    // 累计收/发与上面的上行下行用同一种底框，保持视觉一致
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: tokens.surfaceCardAlt,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        // 一左一右，撑满整行
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '累计收 ${info == null ? "--" : _fmtBytes(info.rx)}',
+                            style: text.bodySmall
+                                ?.copyWith(color: tokens.textSecondary),
+                          ),
+                          Text(
+                            '累计发 ${info == null ? "--" : _fmtBytes(info.tx)}',
+                            style: text.bodySmall
+                                ?.copyWith(color: tokens.textSecondary),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Text(
-                  AppStrings.of(context).trafficAppUsage,
-                  style: text.labelMedium?.copyWith(
-                    color: tokens.textSecondary,
-                    fontWeight: FontWeight.w600,
+            // 应用列表统一放进卡片，和上面的流量卡视觉对齐
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                    child: Text(
+                      AppStrings.of(context).trafficAppUsage,
+                      style: text.labelMedium?.copyWith(
+                        color: tokens.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                  if (!_hasPermission)
+                    _permissionCard(tokens, text)
+                  else if (_loading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 30),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 20,
+                      ),
+                      child: Text(
+                        _error!,
+                        style:
+                            text.bodySmall?.copyWith(color: tokens.danger),
+                      ),
+                    )
+                  else if (_apps.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+                      child: Text(
+                        AppStrings.of(context).trafficNoAppData,
+                        style: text.bodyMedium
+                            ?.copyWith(color: tokens.textSecondary),
+                      ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Column(
+                        children: [
+                          for (final app in _apps)
+                            _AppRow(
+                              app: app,
+                              tokens: tokens,
+                              text: text,
+                              fmt: _fmtBytes,
+                            ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
-            if (!_hasPermission)
-              _permissionCard(tokens, text)
-            else if (_loading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 30),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_error != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Text(
-                  _error!,
-                  style: text.bodySmall?.copyWith(color: tokens.danger),
-                ),
-              )
-            else if (_apps.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 30),
-                child: Center(
-                  child: Text(
-                    AppStrings.of(context).trafficNoAppData,
-                    style:
-                        text.bodyMedium?.copyWith(color: tokens.textSecondary),
-                  ),
-                ),
-              )
-            else
-              for (final app in _apps)
-                _AppRow(
-                  app: app,
-                  tokens: tokens,
-                  text: text,
-                  fmt: _fmtBytes,
-                ),
           ],
         ),
       ),

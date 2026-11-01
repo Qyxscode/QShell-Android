@@ -132,19 +132,28 @@ class ToolPrimaryButton extends StatelessWidget {
     final tokens = AppTokens.of(context);
     return SizedBox(
       width: double.infinity,
-      child: FilledButton.icon(
+      // 不用 FilledButton.icon：它是「图标+文字」整体居中，
+      // 文字会偏右。主按钮只要纯文字，才能视觉居中。
+      child: FilledButton(
         onPressed: loading ? null : onPressed,
-        icon: loading
-            ? SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: tokens.onAccent,
-                ),
+        child: loading
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: tokens.onAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(loadingLabel ?? '处理中…'),
+                ],
               )
-            : Icon(icon ?? Icons.play_arrow_rounded),
-        label: Text(loading ? (loadingLabel ?? '处理中…') : label),
+            : Text(label),
       ),
     );
   }
