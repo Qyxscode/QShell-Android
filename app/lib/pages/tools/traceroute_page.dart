@@ -122,6 +122,8 @@ class _TraceroutePageState extends State<TraceroutePage> {
           ],
           if (_hops.isNotEmpty) ...[
             const SizedBox(height: 16),
+            ToolCard(
+              children: [
             for (final hop in _hops)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 5),
@@ -186,6 +188,8 @@ class _TraceroutePageState extends State<TraceroutePage> {
                   ],
                 ),
               ),
+              ],
+            ),
           ],
         ],
       ),

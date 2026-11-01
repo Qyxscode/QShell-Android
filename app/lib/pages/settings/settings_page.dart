@@ -536,7 +536,6 @@ class _SettingsPageState extends State<SettingsPage> {
                             ],
                           ),
                         ),
-                      ],
                         // 全量卡片折射：开销大，单独一档
                         const SizedBox(height: 8),
                         Container(
@@ -683,6 +682,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             ],
                           ),
                         ),
+                      ],
                       const SizedBox(height: 20),
                       Text(AppStrings.of(context).modeTitle,
                           style: text.titleSmall

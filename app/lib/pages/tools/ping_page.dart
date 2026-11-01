@@ -248,38 +248,48 @@ class _PingPageState extends State<PingPage> {
           ],
           if (_results.isNotEmpty) ...[
             const SizedBox(height: 14),
-            for (final r in _results)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 48,
-                      child: Text(
-                        '#${r.seq}',
-                        style: text.bodySmall
-                            ?.copyWith(color: tokens.textSecondary),
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        r.success ? _ms(r.rtt!) : (r.error ?? AppStrings.of(context).commonFailed),
-                        style: text.bodyMedium?.copyWith(
-                          color: r.success ? tokens.textPrimary : tokens.danger,
-                          fontWeight: FontWeight.w600,
+            ToolCard(
+              children: [
+                for (final r in _results)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 48,
+                          child: Text(
+                            '#${r.seq}',
+                            style: text.bodySmall
+                                ?.copyWith(color: tokens.textSecondary),
+                          ),
                         ),
-                      ),
+                        Expanded(
+                          child: Text(
+                            r.success
+                                ? _ms(r.rtt!)
+                                : (r.error ??
+                                    AppStrings.of(context).commonFailed),
+                            style: text.bodyMedium?.copyWith(
+                              color: r.success
+                                  ? tokens.textPrimary
+                                  : tokens.danger,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          r.success
+                              ? Icons.check_circle_rounded
+                              : Icons.error_outline_rounded,
+                          size: 16,
+                          color:
+                              r.success ? tokens.success : tokens.danger,
+                        ),
+                      ],
                     ),
-                    Icon(
-                      r.success
-                          ? Icons.check_circle_rounded
-                          : Icons.error_outline_rounded,
-                      size: 16,
-                      color: r.success ? tokens.success : tokens.danger,
-                    ),
-                  ],
-                ),
-              ),
+                  ),
+              ],
+            ),
           ],
         ],
       ),

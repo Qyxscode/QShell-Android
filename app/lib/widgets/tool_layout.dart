@@ -136,7 +136,9 @@ class ToolPrimaryButton extends StatelessWidget {
       // 不用 FilledButton.icon：它是「图标+文字」整体居中，
       // 文字会偏右。主按钮只要纯文字，才能视觉居中。
       child: FilledButton(
-        onPressed: loading ? null : onPressed,
+        // loading 时不设成 null：禁用态文字只有 60% 不透明度，会看不清。
+        // 用空回调保持外观不变，同时阻止重复点击。
+        onPressed: loading ? () {} : onPressed,
         child: loading
             ? Row(
                 mainAxisAlignment: MainAxisAlignment.center,
