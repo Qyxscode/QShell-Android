@@ -1,4 +1,6 @@
 import 'dart:convert';
+import '../../design/instant_route.dart';
+import '../../design/glass_card.dart';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
@@ -47,10 +49,18 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _checkingUpdate = false; // ignore: prefer_final_fields
   String? _updateMessage;
 
+  // 后台保活状态
+  bool _keepAliveRunning = false;
+  bool _keepAliveWakeLock = false;
+  bool _keepAliveBatteryOptimized = false;
+  String _keepAliveHint = '正在读取…';
+
+
   @override
   void initState() {
     super.initState();
     _loadUpdatePrefs();
+    _loadKeepAlive();
     _loadPermissions();
     _loadDownloadLocation();
   }
@@ -99,6 +109,36 @@ class _SettingsPageState extends State<SettingsPage> {
     await _loadDownloadLocation();
   }
 
+
+  /// 读取后台保活状态
+  Future<void> _loadKeepAlive() async {
+    final status = await SystemService.keepAliveStatus();
+    if (!mounted) return;
+    final running = status['running'] == true;
+    final wakeLock = status['wakeLock'] == true;
+    final optimized = status['batteryOptimized'] == true;
+    final sdk = (status['sdkInt'] as num?)?.toInt() ?? 0;
+    setState(() {
+      _keepAliveRunning = running;
+      _keepAliveWakeLock = wakeLock;
+      _keepAliveBatteryOptimized = optimized;
+      if (running && wakeLock && !optimized) {
+        _keepAliveHint = '已启用前台服务 + 唤醒锁，息屏可保持连接';
+      } else if (!running) {
+        _keepAliveHint = '未运行：连上 SSH 终端后自动启用';
+      } else {
+        _keepAliveHint = '部分生效：建议允许后台运行，避免被系统回收';
+      }
+      if (sdk >= 34) {
+        _keepAliveHint = '（Android 14+ 使用 specialUse 前台服务）';
+      }
+    });
+  }
+
+  Future<void> _openBatterySettings() async {
+    await SystemService.openBatteryOptimizationSettings();
+  }
+
   Future<void> _loadPermissions() async {
     final usage = await SystemService.hasUsageAccess();
     final phone = await SystemService.hasPhonePermission();
@@ -111,6 +151,33 @@ class _SettingsPageState extends State<SettingsPage> {
       _wifi = wifi;
       _location = location;
     });
+  }
+
+  /// 从相册/文件里选一张壁纸（读取字节后写进应用目录）
+  Future<void> _pickWallpaper() async {
+    try {
+      final picked = await FilePicker.pickFile();
+      if (picked == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(const SnackBar(content: Text('未选择文件')));
+        return;
+      }
+      final bytes = await picked.readAsBytes();
+      await widget.controller.setWallpaperBytes(bytes);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(content: Text('壁纸已设置（${(bytes.length / 1024).round()} KB）')),
+        );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text('选择壁纸失败：$e')));
+    }
   }
 
   Future<void> _importConfig() async {
@@ -341,7 +408,7 @@ class _SettingsPageState extends State<SettingsPage> {
               if (_showLanguage) ...[
                 _SectionTitle(AppStrings.of(context).sectionLanguage,
                     tokens: tokens, text: text),
-                Card(
+                GlassCard(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: SizedBox(
@@ -369,7 +436,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
               _SectionTitle(AppStrings.of(context).sectionAppearance,
                   tokens: tokens, text: text),
-              Card(
+              GlassCard(
                 clipBehavior: Clip.antiAlias,
                 child: ExpansionTile(
                   // 外观选项默认折叠，减少设置页长度
@@ -416,6 +483,206 @@ class _SettingsPageState extends State<SettingsPage> {
                           },
                         ),
                       ),
+                      // 液态玻璃专属：真实折射（档位 B）
+                      if (widget.controller.designLanguage ==
+                          DesignLanguage.glass) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            // 玻璃主题用半透明，MD3 保持实色
+                            color: tokens.glass
+                                ? (Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.white.withValues(alpha: 0.34))
+                                : tokens.surfaceCardAlt,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.blur_on_rounded,
+                                  size: 18, color: tokens.accent),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '真实折射',
+                                      style: text.bodyMedium?.copyWith(
+                                        color: tokens.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '背景透过玻璃时产生扭曲（fragment shader），耗电略高',
+                                      style: text.labelSmall?.copyWith(
+                                        color: tokens.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch(
+                                value: widget.controller.glassRefraction,
+                                onChanged: (value) {
+                                  widget.controller.setGlassRefraction(value);
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                        // 全量卡片折射：开销大，单独一档
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            // 玻璃主题用半透明，MD3 保持实色
+                            color: tokens.glass
+                                ? (Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.white.withValues(alpha: 0.34))
+                                : tokens.surfaceCardAlt,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.layers_rounded,
+                                  size: 18, color: tokens.accent),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '卡片折射',
+                                      style: text.bodyMedium?.copyWith(
+                                        color: tokens.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '所有卡片也做背景折射；卡片多的页面可能掉帧',
+                                      style: text.labelSmall?.copyWith(
+                                        color: tokens.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Switch(
+                                value: widget.controller.glassAllCards,
+                                onChanged: (value) {
+                                  widget.controller.setGlassAllCards(value);
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        // wallpaper: glass needs something behind it to show through
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            // 玻璃主题用半透明，MD3 保持实色
+                            color: tokens.glass
+                                ? (Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.white.withValues(alpha: 0.34))
+                                : tokens.surfaceCardAlt,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.wallpaper_rounded,
+                                      size: 18, color: tokens.accent),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '自定义壁纸',
+                                          style: text.bodyMedium?.copyWith(
+                                            color: tokens.textPrimary,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '玻璃效果需要一个有内容的背景',
+                                          style: text.labelSmall?.copyWith(
+                                            color: tokens.textSecondary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (widget.controller.wallpaper != null)
+                                    TextButton(
+                                      onPressed: () {
+                                        widget.controller.clearWallpaper();
+                                      },
+                                      child: const Text('清除'),
+                                    ),
+                                  TextButton(
+                                    onPressed: _pickWallpaper,
+                                    child: Text(
+                                      widget.controller.wallpaper == null
+                                          ? '选择'
+                                          : '更换',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (widget.controller.wallpaper != null) ...[
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Text(
+                                      '压暗',
+                                      style: text.labelSmall?.copyWith(
+                                        color: tokens.textSecondary,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Slider(
+                                        value: widget.controller.wallpaperDim,
+                                        min: 0,
+                                        max: 0.8,
+                                        divisions: 16,
+                                        onChanged: (value) {
+                                          widget.controller
+                                              .setWallpaperDim(value);
+                                        },
+                                      ),
+                                    ),
+                                    Text(
+                                      '${(widget.controller.wallpaperDim * 100).round()}%',
+                                      style: text.labelSmall?.copyWith(
+                                        color: tokens.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                       const SizedBox(height: 20),
                       Text(AppStrings.of(context).modeTitle,
                           style: text.titleSmall
@@ -499,7 +766,7 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 20),
               _SectionTitle(AppStrings.of(context).sectionTerminal,
                   tokens: tokens, text: text),
-              Card(
+              GlassCard(
                 clipBehavior: Clip.antiAlias,
                 child: ExpansionTile(
                   // 终端选项默认折叠，避免设置页太长
@@ -581,7 +848,12 @@ class _SettingsPageState extends State<SettingsPage> {
                             width: 32,
                             height: 32,
                             decoration: BoxDecoration(
-                              color: tokens.surfaceCardAlt,
+                              // 玻璃主题用半透明，MD3 保持实色
+                              color: tokens.glass
+                                  ? (Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.white.withValues(alpha: 0.08)
+                                      : Colors.white.withValues(alpha: 0.34))
+                                  : tokens.surfaceCardAlt,
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color:
@@ -703,7 +975,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 20),
               _SectionTitle(AppStrings.of(context).sectionData, tokens: tokens, text: text),
-              Card(
+              GlassCard(
                 clipBehavior: Clip.antiAlias,
                 child: ExpansionTile(
                   // 数据操作也默认折叠
@@ -786,7 +1058,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           color: tokens.textDisabled),
                       onTap: () {
                         Navigator.of(context).push(
-                          MaterialPageRoute<void>(
+                          InstantPageRoute<void>(
                             builder: (_) => const BackupPage(),
                           ),
                         );
@@ -796,7 +1068,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               const SizedBox(height: 20),
-              Card(
+              GlassCard(
                 clipBehavior: Clip.antiAlias,
                 child: ExpansionTile(
                   // 权限状态默认折叠
@@ -875,9 +1147,58 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               const SizedBox(height: 20),
+              // 后台保活：SSH 会话能否长期挂着，取决于这几项
+              GlassCard(
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: Icon(Icons.battery_saver_rounded,
+                          color: tokens.accent),
+                      title: Text(
+                        '后台保活',
+                        style: text.bodyLarge
+                            ?.copyWith(color: tokens.textPrimary),
+                      ),
+                      subtitle: Text(
+                        _keepAliveRunning
+                            ? '$_keepAliveHint${_keepAliveWakeLock ? '（唤醒锁已持有）' : ''}'
+                            : _keepAliveHint,
+                        style: text.bodySmall
+                            ?.copyWith(color: tokens.textSecondary),
+                      ),
+                      trailing: IconButton(
+                        tooltip: '刷新',
+                        onPressed: _loadKeepAlive,
+                        icon: const Icon(Icons.refresh_rounded, size: 20),
+                      ),
+                    ),
+                    if (_keepAliveBatteryOptimized) ...[
+                      const Divider(height: 1),
+                      ListTile(
+                        leading: Icon(Icons.warning_amber_rounded,
+                            color: tokens.warning, size: 20),
+                        title: Text(
+                          '系统可能限制后台运行',
+                          style: text.bodyMedium
+                              ?.copyWith(color: tokens.textPrimary),
+                        ),
+                        subtitle: Text(
+                          '息屏时间长了 SSH 会被系统断开，建议允许后台运行',
+                          style: text.bodySmall
+                              ?.copyWith(color: tokens.textSecondary),
+                        ),
+                        trailing: TextButton(
+                          onPressed: _openBatterySettings,
+                          child: const Text('去设置'),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
               const SizedBox(height: 20),
-              const SizedBox(height: 20),
-              Card(
+              GlassCard(
                 child: ListTile(
                   leading: Icon(Icons.delete_outline_rounded,
                       color: tokens.danger),
@@ -892,7 +1213,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 20),
               // 更新
-              Card(
+              GlassCard(
                 clipBehavior: Clip.antiAlias,
                 child: Column(
                   children: [

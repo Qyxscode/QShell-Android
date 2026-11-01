@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../../design/instant_route.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -268,7 +269,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   void _pushNode(NodeDetailPage page) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => page),
+      InstantPageRoute<void>(builder: (_) => page),
     );
   }
 
@@ -316,6 +317,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ],
       ),
       body: RefreshIndicator(
+        color: tokens.accent,
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF2A2F38)
+            : Colors.white.withValues(alpha: 0.92),
+        strokeWidth: 2.2,
+        displacement: 32,
         onRefresh: () => _load(force: true),
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
@@ -345,7 +352,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       progress: _cellProgress(cells),
                       bottomSpace: 30,
                       onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
+                        InstantPageRoute<void>(
                           builder: (_) => const CellularDetailPage(),
                         ),
                       ),
@@ -374,7 +381,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         }
                         if (!context.mounted) return;
                         Navigator.of(context).push(
-                          MaterialPageRoute<void>(
+                          InstantPageRoute<void>(
                             builder: (_) => const WifiScanPage(),
                           ),
                         );
@@ -396,7 +403,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               // 流量用速度做水位：256 KB/s 约半满，更快时接近满格
               progress: _trafficProgress(),
               onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
+                InstantPageRoute<void>(
                   builder: (_) => const TrafficDetailPage(),
                 ),
               ),
@@ -431,9 +438,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   String _cellCaption(AppStrings strings) {
     if (_cells.isEmpty) return strings.homeWaitPermission;
-    return _cells
-        .map((c) => '${strings.cellSlotTemplate.replaceAll('{n}', '${c.slot}')} ${c.carrier} ${c.percent}%')
-        .join(' · ');
+    // 只显示运营商名；卡槽编号和百分比不需要（右侧已有百分比）
+    final names = _cells
+        .map((c) => c.carrier.trim())
+        .where((name) => name.isNotEmpty)
+        .toList();
+    return names.isEmpty ? strings.homeWaitPermission : names.join(' · ');
   }
 
   String? _trafficValue() {

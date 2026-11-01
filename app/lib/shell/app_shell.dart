@@ -1,10 +1,11 @@
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../design/glass_design_system.dart';
+
+import 'bottom_nav_bar.dart';
 import '../design/tokens.dart';
+import '../state/theme_scope.dart';
 import '../i18n/app_strings.dart';
 import '../pages/files/files_page.dart';
 import '../pages/home/home_page.dart';
@@ -39,6 +40,16 @@ class _AppShellState extends State<AppShell> {
     super.dispose();
   }
 
+  /// 拖动切页：瞬时跳转，不跑动画。
+  /// 用 animateToPage 的话，拖动每跨一格都会起一段 280ms 动画，
+  /// 叠加起来就是一两帧的卡顿。
+  void _preview(int index) {
+    if (index == _index) return;
+    _index = index;
+    _controller.jumpToPage(index);
+    setState(() {});
+  }
+
   void _go(int index) {
     if (index == _index) return;
     _controller.animateToPage(
@@ -57,7 +68,9 @@ class _AppShellState extends State<AppShell> {
         onPageChanged: (value) => setState(() => _index = value),
         physics: const ClampingScrollPhysics(),
         children: [
-          for (final page in _pages) RepaintBoundary(child: page),
+          // 不包 RepaintBoundary：它会把页面隔离成独立图层，
+          // 导致 BackdropFilter 采样不到背景，玻璃模糊直接消失。
+          for (final page in _pages) page,
         ],
       ),
     );
@@ -95,21 +108,7 @@ class _AppShellState extends State<AppShell> {
       },
       child: Scaffold(
         extendBody: true,
-        body: Stack(
-          children: [
-            // 背景层固定占位，切换主题时不改变 widget 结构，避免 PageView 重建导致白屏
-            Positioned.fill(
-              child: tokens.glass
-                  ? GlassBackdrop(
-                      accent: tokens.accent,
-                      brightness: Theme.of(context).brightness,
-                      child: const SizedBox.expand(),
-                    )
-                  : const SizedBox.expand(),
-            ),
-            Positioned.fill(child: _sheetBody()),
-          ],
-        ),
+        body: _sheetBody(),
         bottomNavigationBar: SafeArea(
           minimum: const EdgeInsets.fromLTRB(0, 0, 0, 10),
           // 用 Row 而不是 Align：Align 会撑满 bottomNavigationBar 的高度，
@@ -119,13 +118,16 @@ class _AppShellState extends State<AppShell> {
               const SizedBox(width: 16),
               SizedBox(
                 width: 320,
-                child: _BottomBar(
+                child: BottomNavBar(
                   index: _index,
                   labels: labels,
                   iconsOutlined: iconsOutlined,
                   iconsFilled: iconsFilled,
                   onSelect: _go,
+                  onPreview: _preview,
                   tokens: tokens,
+                  glassRefraction:
+                      ThemeScope.of(context).glassRefraction,
                 ),
               ),
             ],
@@ -163,145 +165,7 @@ class _AppShellState extends State<AppShell> {
 }
 
 /// 自定义悬浮底栏：滑块式高亮背景 + 小号标签，比 M3 NavigationBar 更收敛。
-class _BottomBar extends StatelessWidget {
-  const _BottomBar({
-    required this.index,
-    required this.labels,
-    required this.iconsOutlined,
-    required this.iconsFilled,
-    required this.onSelect,
-    required this.tokens,
-  });
 
-  final int index;
-  final List<String> labels;
-  final List<IconData> iconsOutlined;
-  final List<IconData> iconsFilled;
-  final ValueChanged<int> onSelect;
-  final AppTokens tokens;
-
-  static const double _height = 66;
-  static const double _pad = 5;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    final count = labels.length;
-
-    final bar = Container(
-      height: _height,
-      decoration: BoxDecoration(
-        // 玻璃模式：日间白玻璃、夜间黑玻璃。
-        // 透明度压到很低，模糊后的内容要能看出轮廓，否则就是一块实色。
-        color: tokens.glass
-            ? (Theme.of(context).brightness == Brightness.dark
-                ? Colors.black.withValues(alpha: 0.12)
-                : Colors.white.withValues(alpha: 0.16))
-            : tokens.surfaceCard,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: tokens.outlineSoft),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final itemWidth = (constraints.maxWidth - _pad * 2) / count;
-          return Stack(
-            children: [
-              // 高亮滑块：跟随选中项平移
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-                left: _pad + itemWidth * index,
-                top: _pad,
-                bottom: _pad,
-                width: itemWidth,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    // 玻璃模式：高亮是淡色发光胶囊，不是实色块
-                    color: tokens.glass
-                        ? (Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white.withValues(alpha: 0.09)
-                            : tokens.accent.withValues(alpha: 0.12))
-                        : tokens.accentSoft,
-                    borderRadius: BorderRadius.circular(16),
-                    border: tokens.glass
-                        ? Border.all(
-                            color: Colors.white.withValues(alpha: 0.10),
-                            width: 1,
-                          )
-                        : null,
-                  ),
-                ),
-              ),
-              Row(
-                children: [
-                  for (var i = 0; i < count; i++)
-                    Expanded(
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => onSelect(i),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            AnimatedScale(
-                              scale: i == index ? 1.0 : 0.94,
-                              duration: const Duration(milliseconds: 220),
-                              curve: Curves.easeOutCubic,
-                              child: Icon(
-                                i == index ? iconsFilled[i] : iconsOutlined[i],
-                                size: 24,
-                                color: i == index
-                                    ? (tokens.glass ? tokens.accent : tokens.onAccentSoft)
-                                    : tokens.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            AnimatedDefaultTextStyle(
-                              duration: const Duration(milliseconds: 220),
-                              style: (text.labelSmall ??
-                                      const TextStyle(fontSize: 10))
-                                  .copyWith(
-                                fontSize: 10,
-                                color: i == index
-                                    ? (tokens.glass ? tokens.accent : tokens.onAccentSoft)
-                                    : tokens.textSecondary,
-                                fontWeight: i == index
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                              ),
-                              child: Text(labels[i], maxLines: 1),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    if (!tokens.glass) return bar;
-    // 玻璃模式：磨砂 + 半透明，让背景光斑透过来
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: bar,
-      ),
-    );
-  }
-}
-
-/// PageView 默认不保活：包一层让每页状态常驻。
 class _KeepAlive extends StatefulWidget {
   const _KeepAlive({required this.child});
 

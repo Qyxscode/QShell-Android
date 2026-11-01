@@ -1,4 +1,6 @@
 import 'dart:io';
+import '../../design/instant_route.dart';
+import '../../design/glass_card.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -128,7 +130,7 @@ class _SessionsPageState extends State<SessionsPage> {
       return;
     }
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      InstantPageRoute<void>(
         builder: (_) => TerminalPage(
           host: host.host,
           port: host.port,
@@ -178,7 +180,7 @@ class _SessionsPageState extends State<SessionsPage> {
             tooltip: AppStrings.of(context).memoTitle,
             onPressed: () {
               Navigator.of(context).push(
-                MaterialPageRoute<void>(
+                InstantPageRoute<void>(
                   builder: (_) => const MemoPage(),
                 ),
               );
@@ -411,7 +413,7 @@ class _SessionsPageState extends State<SessionsPage> {
           ),
         ],
         for (final group in groups) ...[
-          Card(
+          GlassCard(
             margin: const EdgeInsets.only(bottom: 10),
             clipBehavior: Clip.antiAlias,
             child: ExpansionTile(
@@ -500,7 +502,9 @@ class _SearchField extends StatelessWidget {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         filled: true,
-        fillColor: tokens.surfaceCardAlt,
+        fillColor: tokens.glass
+            ? Colors.white.withValues(alpha: 0.28)
+            : tokens.surfaceCardAlt,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(20),
           borderSide: BorderSide.none,
@@ -789,7 +793,9 @@ class _HostEditSheetState extends State<_HostEditSheet> {
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 filled: true,
-                fillColor: tokens.surfaceCardAlt,
+                fillColor: tokens.glass
+                    ? Colors.white.withValues(alpha: 0.28)
+                    : tokens.surfaceCardAlt,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -821,7 +827,7 @@ class _HostTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = host.isSsh;
-    return Card(
+    return GlassCard(
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,

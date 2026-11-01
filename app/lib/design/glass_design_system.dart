@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -49,7 +51,10 @@ class GlassDesignSystem implements DesignSystem {
       useMaterial3: true,
       colorScheme: scheme,
       brightness: brightness,
-      scaffoldBackgroundColor: tokens.background,
+      // 路由/导航器的默认底色设为透明，否则 push 页面瞬间会白一下
+      canvasColor: Colors.transparent,
+      // 页面 Scaffold 必须透明，否则会盖住壁纸/光斑背景层
+      scaffoldBackgroundColor: Colors.transparent,
       visualDensity: VisualDensity.adaptivePlatformDensity,
       splashFactory: InkSparkle.splashFactory,
     );
@@ -93,7 +98,7 @@ class GlassDesignSystem implements DesignSystem {
       iconButtonTheme: IconButtonThemeData(
         style: IconButton.styleFrom(
           backgroundColor:
-              Colors.white.withValues(alpha: isDark ? 0.10 : 0.55),
+              Colors.white.withValues(alpha: isDark ? 0.08 : 0.40),
           foregroundColor: tokens.textPrimary,
           shape: const CircleBorder(),
           minimumSize: const Size(40, 40),
@@ -235,22 +240,66 @@ class GlassBackdrop extends StatelessWidget {
     required this.child,
     required this.accent,
     required this.brightness,
+    this.wallpaper,
+    this.wallpaperDim = 0.35,
+    required this.background,
   });
 
   final Widget child;
   final Color accent;
   final Brightness brightness;
 
+  /// 底色（玻璃主题的 background token）
+  final Color background;
+
+  /// 自定义壁纸路径；为空时用内置彩色光斑
+  final String? wallpaper;
+
+  /// 壁纸压暗程度（保证文字可读）
+  final double wallpaperDim;
+
   @override
   Widget build(BuildContext context) {
     final isDark = brightness == Brightness.dark;
     // 日间背景浅，光斑要给足才能透出玻璃感
     final strength = isDark ? 0.46 : 0.52;
+    final wallpaperPath = wallpaper;
+    if (wallpaperPath != null && wallpaperPath.isNotEmpty) {
+      return Stack(
+        children: [
+          Positioned.fill(
+            child: ColoredBox(
+              color: background,
+            ),
+          ),
+          Positioned.fill(
+            child: Image.file(
+              File(wallpaperPath),
+              fit: BoxFit.cover,
+              // 壁纸是背景，缩到半分辨率就够，省内存
+              cacheWidth: 1080,
+              // 重建时保留上一帧，避免打开页面瞬间闪白
+              gaplessPlayback: true,
+              errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+            ),
+          ),
+          // 压暗：玻璃要「透」，但文字还得看得清
+          Positioned.fill(
+            child: ColoredBox(
+              color: (isDark ? Colors.black : Colors.white)
+                  .withValues(alpha: wallpaperDim),
+            ),
+          ),
+          Positioned.fill(child: child),
+        ],
+      );
+    }
+
     return Stack(
       children: [
         Positioned.fill(
           child: ColoredBox(
-            color: Theme.of(context).scaffoldBackgroundColor,
+            color: background,
           ),
         ),
         Positioned(

@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../design/instant_route.dart';
+import '../../design/glass_card.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -400,7 +402,7 @@ class _TerminalPageState extends State<TerminalPage> {
                       onPressed: () {
                         Navigator.pop(context);
                         Navigator.of(context).push(
-                          MaterialPageRoute<void>(
+                          InstantPageRoute<void>(
                             builder: (_) => const MemoPage(),
                           ),
                         );
@@ -422,7 +424,7 @@ class _TerminalPageState extends State<TerminalPage> {
                           ?.copyWith(color: tokens.textDisabled),
                     ),
                   ),
-                  Card(
+                  GlassCard(
                     clipBehavior: Clip.antiAlias,
                     child: Column(
                       children: [

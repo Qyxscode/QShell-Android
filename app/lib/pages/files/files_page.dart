@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../design/instant_route.dart';
+import '../../design/glass_card.dart';
 
 import '../../design/tokens.dart';
 import '../../i18n/app_strings.dart';
@@ -50,7 +52,7 @@ class _FilesPageState extends State<FilesPage> {
       return;
     }
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      InstantPageRoute<void>(
         builder: (_) => SftpBrowserPage(
           host: host.host,
           port: host.port,
@@ -69,7 +71,7 @@ class _FilesPageState extends State<FilesPage> {
 
   void _openServer(RemoteServer server) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      InstantPageRoute<void>(
         builder: (_) => RemoteBrowserPage(server: server),
       ),
     );
@@ -244,7 +246,7 @@ class _FilesPageState extends State<FilesPage> {
           )
         else
           for (final server in servers)
-            Card(
+            GlassCard(
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
                 leading: Icon(
@@ -294,7 +296,7 @@ class _FilesPageState extends State<FilesPage> {
           )
         else
           for (final group in _groups) ...[
-            Card(
+            GlassCard(
               margin: const EdgeInsets.only(bottom: 8),
               clipBehavior: Clip.antiAlias,
               child: _GroupSection(

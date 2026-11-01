@@ -104,6 +104,41 @@ class SystemChannel(private val activity: MainActivity) {
                 }
                 result.success(null)
             }
+            // 打开系统的电池优化设置（部分 ROM 需要手动允许后台）
+            "openBatterySettings" -> {
+                runCatching {
+                    activity.startActivity(
+                        android.content.Intent(
+                            android.provider.Settings
+                                .ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS,
+                        ),
+                    )
+                }
+                result.success(null)
+            }
+            // 保活状态诊断：服务是否在跑、锁是否持有、是否已忽略电池优化
+            "keepAliveStatus" -> {
+                val powerManager = activity.getSystemService(Context.POWER_SERVICE)
+                        as android.os.PowerManager
+                val wifiManager = activity.applicationContext
+                    .getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+                val map = mutableMapOf<String, Any?>(
+                    "running" to TerminalKeepAliveService.isRunning,
+                    "wakeLock" to TerminalKeepAliveService.holdingWakeLock,
+                    "batteryOptimized" to !powerManager.isIgnoringBatteryOptimizations(
+                        activity.packageName,
+                    ),
+                    "wifiLock" to runCatching {
+                        wifiManager.isWifiEnabled
+                    }.getOrDefault(false),
+                    "notificationsAllowed" to (
+                        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                            hasPermission(Manifest.permission.POST_NOTIFICATIONS)
+                        ),
+                    "sdkInt" to Build.VERSION.SDK_INT,
+                )
+                result.success(map)
+            }
             "stopKeepAlive" -> {
                 activity.stopService(
                     android.content.Intent(activity, TerminalKeepAliveService::class.java),

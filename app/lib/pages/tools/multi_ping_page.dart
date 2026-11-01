@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../design/glass_card.dart';
 
 import 'package:flutter/material.dart';
 
@@ -200,7 +201,7 @@ class _MultiPingPageState extends State<MultiPingPage> {
           if (_targets.isNotEmpty) ...[
             const SizedBox(height: 16),
             for (final target in _targets)
-              Card(
+              GlassCard(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../design/instant_route.dart';
 import '../pages/settings/settings_page.dart';
 import '../state/theme_scope.dart';
 
@@ -14,7 +15,7 @@ class SettingsAction extends StatelessWidget {
       icon: const Icon(Icons.settings_outlined),
       onPressed: () {
         Navigator.of(context).push(
-          MaterialPageRoute<void>(
+          InstantPageRoute<void>(
             builder: (_) => SettingsPage(controller: ThemeScope.of(context)),
           ),
         );

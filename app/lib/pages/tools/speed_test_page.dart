@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../design/glass_card.dart';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -227,7 +228,7 @@ class _SpeedTestPageState extends State<SpeedTestPage> {
           ],
           if (result != null) ...[
             const SizedBox(height: 20),
-            Card(
+            GlassCard(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                 child: Column(

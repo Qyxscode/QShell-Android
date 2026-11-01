@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../design/glass_card.dart';
 
 import 'package:flutter/material.dart';
 
@@ -139,7 +140,7 @@ class _CellularDetailPageState extends State<CellularDetailPage> {
                         children: [
                           if (current != null) ...[
                             _SectionTitle(AppStrings.of(context).cellCarrier, tokens, text),
-                            Card(
+                            GlassCard(
                               child: Padding(
                                 padding:
                                     const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -177,7 +178,7 @@ class _CellularDetailPageState extends State<CellularDetailPage> {
                               ),
                             ),
                             _SectionTitle(AppStrings.of(context).cellServing, tokens, text),
-                            Card(
+                            GlassCard(
                               child: Padding(
                                 padding:
                                     const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -226,7 +227,7 @@ class _CellularDetailPageState extends State<CellularDetailPage> {
                               ),
                             ),
                             _SectionTitle(AppStrings.of(context).cellSignal, tokens, text),
-                            Card(
+                            GlassCard(
                               child: Padding(
                                 padding:
                                     const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -310,7 +311,7 @@ class _CellularDetailPageState extends State<CellularDetailPage> {
                                 '邻小区（${current.neighbors.length}）',
                                 tokens,
                                 text),
-                            Card(
+                            GlassCard(
                               child: current.neighbors.isEmpty
                                   ? Padding(
                                       padding: const EdgeInsets.all(16),
@@ -412,7 +413,7 @@ class _LocationSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final data = info;
-    return Card(
+    return GlassCard(
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
         initiallyExpanded: false,
@@ -518,7 +519,7 @@ class _SlotCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return GlassCard(
       margin: EdgeInsets.zero,
       color: selected ? tokens.accentSoft : tokens.surfaceCard,
       child: InkWell(

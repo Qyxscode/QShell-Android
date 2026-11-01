@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../design/glass_card.dart';
 
 import '../../design/tokens.dart';
 import '../../i18n/app_strings.dart';
@@ -141,7 +142,7 @@ class _GeoPingPageState extends State<GeoPingPage> {
               ],
             ),
             const SizedBox(height: 8),
-            Card(
+            GlassCard(
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [

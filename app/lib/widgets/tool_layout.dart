@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../design/glass_card.dart';
 
 import '../design/tokens.dart';
 
@@ -25,7 +26,7 @@ class ToolCard extends StatelessWidget {
       if (i > 0) spaced.add(const SizedBox(height: 10));
       spaced.add(children[i]);
     }
-    return Card(
+    return GlassCard(
       clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: padding,

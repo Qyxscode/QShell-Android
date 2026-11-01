@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../design/instant_route.dart';
+import '../../design/glass_card.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -356,7 +358,7 @@ class _MonitorPageState extends State<MonitorPage> {
               onTap: () {
                 Navigator.pop(context);
                 Navigator.of(context).push(
-                  MaterialPageRoute<void>(
+                  InstantPageRoute<void>(
                     builder: (_) =>
                         PingPage(initialHost: runtime.node.host),
                   ),
@@ -369,7 +371,7 @@ class _MonitorPageState extends State<MonitorPage> {
               onTap: () {
                 Navigator.pop(context);
                 Navigator.of(context).push(
-                  MaterialPageRoute<void>(
+                  InstantPageRoute<void>(
                     builder: (_) =>
                         TraceroutePage(initialHost: runtime.node.host),
                   ),
@@ -474,7 +476,7 @@ class _MonitorPageState extends State<MonitorPage> {
                       ),
                     ),
                     for (final runtime in _nodes)
-                      Card(
+                      GlassCard(
                         margin: const EdgeInsets.only(bottom: 8),
                         child: InkWell(
                           onTap: () => _showActions(runtime),

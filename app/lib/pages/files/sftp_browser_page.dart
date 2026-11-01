@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../../design/glass_card.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -608,7 +609,7 @@ class _TransferCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final progress = total <= 0 ? null : (done / total).clamp(0.0, 1.0);
     final percent = progress == null ? '' : '${(progress * 100).round()}%';
-    return Card(
+    return GlassCard(
       margin: const EdgeInsets.only(bottom: 10),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 10, 8, 14),

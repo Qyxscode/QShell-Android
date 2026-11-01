@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../design/glass_card.dart';
 
 import '../../design/tokens.dart';
 import '../../i18n/app_strings.dart';
@@ -72,7 +73,7 @@ class _IpCalculatorPageState extends State<IpCalculatorPage> {
           ],
           if (result != null) ...[
             const SizedBox(height: 16),
-            Card(
+            GlassCard(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
                 child: Column(

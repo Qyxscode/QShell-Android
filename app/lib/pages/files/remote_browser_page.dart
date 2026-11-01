@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import '../../design/glass_card.dart';
 import 'package:flutter/material.dart';
 
 import '../../design/tokens.dart';
@@ -411,7 +412,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
           if (transferring)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-              child: Card(
+              child: GlassCard(
                 margin: EdgeInsets.zero,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(14, 10, 8, 14),

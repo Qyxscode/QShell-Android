@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../design/glass_card.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -153,7 +154,7 @@ class _TrafficDetailPageState extends State<TrafficDetailPage> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
-            Card(
+            GlassCard(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                 child: Column(
@@ -220,7 +221,7 @@ class _TrafficDetailPageState extends State<TrafficDetailPage> {
             ),
             const SizedBox(height: 16),
             // 应用列表统一放进卡片，和上面的流量卡视觉对齐
-            Card(
+            GlassCard(
               clipBehavior: Clip.antiAlias,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -322,7 +323,7 @@ class _TrafficDetailPageState extends State<TrafficDetailPage> {
   }
 
   Widget _permissionCard(AppTokens tokens, TextTheme text) {
-    return Card(
+    return GlassCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

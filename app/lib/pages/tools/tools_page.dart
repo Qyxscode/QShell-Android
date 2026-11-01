@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../design/instant_route.dart';
+import '../../design/glass_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../design/tokens.dart';
@@ -265,7 +267,7 @@ class _ToolGroup extends StatelessWidget {
               ),
             ),
           ),
-          Card(
+          GlassCard(
             clipBehavior: Clip.antiAlias,
             child: ReorderableListView.builder(
               shrinkWrap: true,
@@ -344,7 +346,7 @@ class _ToolRow extends StatelessWidget {
       onTap: () {
         final builder = item.builder;
         if (builder != null) {
-          Navigator.of(context).push(MaterialPageRoute<void>(builder: builder));
+          Navigator.of(context).push(InstantPageRoute<void>(builder: builder));
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(AppStrings.of(context).toolTodoTemplate.replaceAll('{name}', item.title))),

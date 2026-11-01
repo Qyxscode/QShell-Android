@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../design/glass_card.dart';
 
 import '../../../design/tokens.dart';
 import '../../../widgets/sparkline.dart';
@@ -53,7 +54,7 @@ class MetricCard extends StatelessWidget {
     final tokens = AppTokens.of(context);
     final text = Theme.of(context).textTheme;
 
-    return Card(
+    return GlassCard(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
@@ -82,6 +83,7 @@ class MetricCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // 拉高时上下均分，保持内容垂直居中
                   Row(
                     children: [
                       Container(
@@ -148,6 +150,8 @@ class MetricCard extends StatelessWidget {
                         ],
                       ],
                     ),
+                    // 拉高时把空白放在数字和说明之间，说明行贴卡片底部
+                    if (bottomSpace > 0) SizedBox(height: bottomSpace),
                     const SizedBox(height: 2),
                     Row(
                       children: [
@@ -178,7 +182,6 @@ class MetricCard extends StatelessWidget {
                         color: accent,
                       ),
                     ],
-                    if (bottomSpace > 0) SizedBox(height: bottomSpace),
                   ],
                 ],
               ),

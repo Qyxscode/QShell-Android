@@ -656,6 +656,23 @@ class SystemService {
   }
 
   /// 停止终端保活服务。
+  /// 保活诊断：服务是否在跑、WakeLock、电池优化等
+  /// 打开系统的电池优化设置页
+  static Future<void> openBatteryOptimizationSettings() async {
+    try {
+      await _channel.invokeMethod<void>('openBatterySettings');
+    } catch (_) {}
+  }
+
+  static Future<Map<String, dynamic>> keepAliveStatus() async {
+    try {
+      final raw = await _channel.invokeMethod<Map<dynamic, dynamic>>('keepAliveStatus');
+      return raw?.cast<String, dynamic>() ?? <String, dynamic>{};
+    } catch (_) {
+      return <String, dynamic>{};
+    }
+  }
+
   static Future<void> stopKeepAlive() async {
     try {
       await _channel.invokeMethod<void>('stopKeepAlive');

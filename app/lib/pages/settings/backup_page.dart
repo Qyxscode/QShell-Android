@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../../design/glass_card.dart';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
@@ -199,7 +200,7 @@ class _BackupPageState extends State<BackupPage> {
   }
 
   Future<void> _restore(WebdavEntry entry) async {
-    // 恢复前统计当前数据并留快照，避免手机端自建内容被静默覆盖
+    // 恢复前统计当前数据，让用户知道会覆盖多少
     final store = QShellConfigStore();
     final currentGroups = await store.load();
     final currentMemos = await store.loadMemos();
@@ -219,8 +220,7 @@ class _BackupPageState extends State<BackupPage> {
         title: Text(AppStrings.of(context).backupRestoreTitle),
         content: Text(
           '$confirmText\n\n'
-          '当前 $hostCount 个连接、$memoCount 条备忘录将被替换。\n'
-          '恢复前会自动保存一份当前配置快照。',
+          '当前 $hostCount 个连接、$memoCount 条备忘录将被替换。',
         ),
         actions: [
           TextButton(
@@ -235,15 +235,6 @@ class _BackupPageState extends State<BackupPage> {
       ),
     );
     if (ok != true || !mounted) return;
-
-    // 存快照（恢复失败或反悔时可找回）
-    try {
-      final snapshot = await store.exportRawJson();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('qshell.config.snapshot', snapshot);
-    } catch (_) {
-      // 快照失败不阻断恢复
-    }
 
     setState(() {
       _busy = true;
@@ -405,7 +396,7 @@ class _BackupPageState extends State<BackupPage> {
                   )
                 else
                   for (final file in _files)
-                    Card(
+                    GlassCard(
                       margin: const EdgeInsets.only(bottom: 8),
                       child: ListTile(
                         leading: Icon(Icons.folder_zip_rounded,

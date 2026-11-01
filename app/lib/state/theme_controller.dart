@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../design/design_switcher.dart';
@@ -13,12 +16,20 @@ class ThemeController extends ChangeNotifier {
   static const _kDynamic = 'appearance.use_dynamic_color';
   static const _kSeed = 'appearance.seed';
   static const _kDesign = 'appearance.design_language';
+  static const _kGlassRefraction = 'appearance.glass_refraction';
+  static const _kGlassAllCards = 'appearance.glass_all_cards';
+  static const _kWallpaper = 'appearance.wallpaper';
+  static const _kWallpaperDim = 'appearance.wallpaper_dim';
   static const _kTerminalFontSize = 'terminal.font_size';
   static const _kTerminalBgColor = 'terminal.bg_color';
   static const _kTerminalBgImage = 'terminal.bg_image';
   static const _kTerminalFgColor = 'terminal.fg_color';
 
   DesignLanguage _designLanguage = DesignLanguage.md3;
+  bool _glassRefraction = false;
+  bool _glassAllCards = false;
+  String? _wallpaper;
+  double _wallpaperDim = 0.35;
   ThemeModeChoice _modeChoice = ThemeModeChoice.system;
   bool _useDynamicColor = true;
   Color _seed = accentPresets.first;
@@ -28,6 +39,18 @@ class ThemeController extends ChangeNotifier {
   int? _terminalFgColor;
 
   DesignLanguage get designLanguage => _designLanguage;
+
+  /// 液态玻璃档位 B：真实折射（fragment shader）
+  bool get glassRefraction => _glassRefraction;
+
+  /// 全量卡片启用真实折射（性能开销大，默认关）
+  bool get glassAllCards => _glassAllCards;
+
+  /// 自定义壁纸的本地文件路径（null = 用内置光斑）
+  String? get wallpaper => _wallpaper;
+
+  /// 壁纸压暗程度（0 = 原图，1 = 全黑）
+  double get wallpaperDim => _wallpaperDim;
   ThemeModeChoice get modeChoice => _modeChoice;
   bool get useDynamicColor => _useDynamicColor;
   Color get seed => _seed;
@@ -95,6 +118,10 @@ class ThemeController extends ChangeNotifier {
     if (seedValue != null) _seed = Color(seedValue);
     _designLanguage = DesignLanguage.values[
         (prefs.getInt(_kDesign) ?? 0).clamp(0, DesignLanguage.values.length - 1)];
+    _glassRefraction = prefs.getBool(_kGlassRefraction) ?? false;
+    _glassAllCards = prefs.getBool(_kGlassAllCards) ?? false;
+    _wallpaper = prefs.getString(_kWallpaper);
+    _wallpaperDim = prefs.getDouble(_kWallpaperDim) ?? 0.35;
     _terminalFontSize = (prefs.getDouble(_kTerminalFontSize) ?? 13)
         .clamp(minTerminalFontSize, maxTerminalFontSize);
     _terminalBgColor = prefs.getInt(_kTerminalBgColor);
@@ -143,6 +170,73 @@ class ThemeController extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_kTerminalFontSize, next);
+  }
+
+
+
+
+  /// 选了一张壁纸：复制到应用私有目录，避免外部路径失效
+  /// 设置壁纸：直接写入字节，避免 FilePicker 返回的临时路径失效
+  Future<void> setWallpaperBytes(List<int>? bytes) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (bytes == null || bytes.isEmpty) {
+      _wallpaper = null;
+      notifyListeners();
+      await prefs.remove(_kWallpaper);
+      return;
+    }
+    var dir = await getApplicationSupportDirectory();
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    // 文件名带时间戳：Image.file 按路径缓存，固定文件名换图不会刷新
+    final file = File(
+      '${dir.path}/wallpaper_${DateTime.now().millisecondsSinceEpoch}.img',
+    );
+    await file.writeAsBytes(bytes, flush: true);
+    final old = _wallpaper;
+    _wallpaper = file.path;
+    notifyListeners();
+    await prefs.setString(_kWallpaper, file.path);
+    debugPrint(
+      'setWallpaperBytes: wrote ${file.path} '
+      '(exists=${await file.exists()}, bytes=${bytes.length})',
+    );
+    if (old != null && old != file.path) {
+      try {
+        await File(old).delete();
+      } catch (_) {}
+    }
+  }
+
+  Future<void> clearWallpaper() async {
+    await setWallpaperBytes(null);
+  }
+
+
+  Future<void> setWallpaperDim(double value) async {
+    final next = value.clamp(0.0, 0.9);
+    if ((_wallpaperDim - next).abs() < 0.001) return;
+    _wallpaperDim = next;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_kWallpaperDim, next);
+  }
+
+  Future<void> setGlassAllCards(bool value) async {
+    if (_glassAllCards == value) return;
+    _glassAllCards = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kGlassAllCards, value);
+  }
+
+  Future<void> setGlassRefraction(bool value) async {
+    if (_glassRefraction == value) return;
+    _glassRefraction = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kGlassRefraction, value);
   }
 
   Future<void> setDesignLanguage(DesignLanguage value) async {

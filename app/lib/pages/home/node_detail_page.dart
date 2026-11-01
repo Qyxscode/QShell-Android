@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../design/instant_route.dart';
+import '../../design/glass_card.dart';
 import 'package:flutter/services.dart';
 
 import '../../design/tokens.dart';
@@ -75,7 +77,7 @@ class _NodeDetailPageState extends State<NodeDetailPage> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
-          Card(
+          GlassCard(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
               child: Row(
@@ -122,7 +124,7 @@ class _NodeDetailPageState extends State<NodeDetailPage> {
             ),
           ),
           const SizedBox(height: 16),
-          Card(
+          GlassCard(
             child: Column(
               children: [
                 ListTile(
@@ -162,7 +164,7 @@ class _NodeDetailPageState extends State<NodeDetailPage> {
             ),
           ),
           const SizedBox(height: 8),
-          Card(
+          GlassCard(
             child: Column(
               children: [
                 ListTile(
@@ -174,7 +176,7 @@ class _NodeDetailPageState extends State<NodeDetailPage> {
                   onTap: ip == null
                       ? null
                       : () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
+                            InstantPageRoute<void>(
                               builder: (_) => PingPage(initialHost: ip),
                             ),
                           ),
@@ -190,7 +192,7 @@ class _NodeDetailPageState extends State<NodeDetailPage> {
                   onTap: ip == null
                       ? null
                       : () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
+                            InstantPageRoute<void>(
                               builder: (_) => PortScanPage(initialHost: ip),
                             ),
                           ),
@@ -205,7 +207,7 @@ class _NodeDetailPageState extends State<NodeDetailPage> {
                   onTap: ip == null
                       ? null
                       : () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
+                            InstantPageRoute<void>(
                               builder: (_) => WhoisPage(initialHost: ip),
                             ),
                           ),
@@ -220,7 +222,7 @@ class _NodeDetailPageState extends State<NodeDetailPage> {
                     trailing: Icon(Icons.chevron_right_rounded,
                         color: tokens.textDisabled),
                     onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
+                      InstantPageRoute<void>(
                         builder: (_) => const UpnpScanPage(),
                       ),
                     ),

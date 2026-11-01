@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../design/instant_route.dart';
+import '../../design/glass_card.dart';
 
 import 'package:flutter/material.dart';
 
@@ -161,14 +163,14 @@ class _WifiScanPageState extends State<WifiScanPage> {
                   text: text,
                   onPingGateway: (host) {
                     Navigator.of(context).push(
-                      MaterialPageRoute<void>(
+                      InstantPageRoute<void>(
                         builder: (_) => PingPage(initialHost: host),
                       ),
                     );
                   },
                   onPortScan: (host) {
                     Navigator.of(context).push(
-                      MaterialPageRoute<void>(
+                      InstantPageRoute<void>(
                         builder: (_) => PortScanPage(initialHost: host),
                       ),
                     );
@@ -267,7 +269,7 @@ class _SummaryCard extends StatelessWidget {
     final standard = info == null ? '' : _standardName(info.standard);
     final width = info == null ? '' : _widthName(info.channelWidth);
 
-    return Card(
+    return GlassCard(
       clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -374,7 +376,7 @@ class _HistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return GlassCard(
       clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
@@ -546,7 +548,7 @@ class _ChannelCard extends StatelessWidget {
         .where((r) => band == 0 ? !_is5g(r.frequency) : _is5g(r.frequency))
         .toList();
 
-    return Card(
+    return GlassCard(
       clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
@@ -814,7 +816,7 @@ class _ApListCard extends StatelessWidget {
         .where((r) => band == 0 ? !_is5g(r.frequency) : _is5g(r.frequency))
         .toList();
 
-    return Card(
+    return GlassCard(
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1084,7 +1086,7 @@ class _ChannelScoreCard extends StatelessWidget {
     final worst = scored.reduce((a, b) => a.$2 >= b.$2 ? a : b);
     final maxScore = worst.$2 == 0 ? 1.0 : worst.$2;
 
-    return Card(
+    return GlassCard(
       clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
@@ -1230,7 +1232,7 @@ class _QualityCard extends StatelessWidget {
         '链路速率偏低，可能被同频设备拖累',
     ];
 
-    return Card(
+    return GlassCard(
       clipBehavior: Clip.antiAlias,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../design/glass_card.dart';
 
 import 'package:flutter/material.dart';
 
@@ -212,7 +213,7 @@ class _PingPageState extends State<PingPage> {
           ],
           if (summary != null) ...[
             const SizedBox(height: 16),
-            Card(
+            GlassCard(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 child: Column(

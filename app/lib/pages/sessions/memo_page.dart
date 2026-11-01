@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../design/glass_card.dart';
 import 'package:flutter/services.dart';
 
 import '../../design/tokens.dart';
@@ -408,7 +409,7 @@ class _MemoPageState extends State<MemoPage> {
                           ),
                         ),
                       ),
-                      Card(
+                      GlassCard(
                         clipBehavior: Clip.antiAlias,
                         child: Column(
                           children: [

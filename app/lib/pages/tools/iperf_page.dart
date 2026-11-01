@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../design/glass_card.dart';
 
 import '../../design/tokens.dart';
 import '../../i18n/app_strings.dart';
@@ -253,7 +254,7 @@ class _IperfPageState extends State<IperfPage> {
           ],
           if (result != null) ...[
             const SizedBox(height: 20),
-            Card(
+            GlassCard(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                 child: Column(

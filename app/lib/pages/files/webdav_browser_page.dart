@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import '../../design/glass_card.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
@@ -409,7 +410,7 @@ class _WebdavBrowserPageState extends State<WebdavBrowserPage> {
           if (transferring)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-              child: Card(
+              child: GlassCard(
                 margin: EdgeInsets.zero,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),

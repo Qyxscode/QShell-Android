@@ -31,7 +31,15 @@ class TerminalKeepAliveService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification = buildNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            // Android 14+：dataSync 类型有每日配额，长连接会被系统掐掉，
+            // 必须用 specialUse 才能长时间挂后台
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
                 notification,
@@ -41,6 +49,7 @@ class TerminalKeepAliveService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
         acquireLocks()
+        isRunning = true
         return START_STICKY
     }
 
@@ -55,6 +64,7 @@ class TerminalKeepAliveService : Service() {
                     setReferenceCounted(false)
                     acquire()
                 }
+                holdingWakeLock = true
             }
         }
         if (wifiLock?.isHeld != true) {
@@ -77,6 +87,7 @@ class TerminalKeepAliveService : Service() {
             if (wakeLock?.isHeld == true) wakeLock?.release()
         }
         wakeLock = null
+        holdingWakeLock = false
         runCatching {
             if (wifiLock?.isHeld == true) wifiLock?.release()
         }
@@ -85,6 +96,7 @@ class TerminalKeepAliveService : Service() {
 
     override fun onDestroy() {
         releaseLocks()
+        isRunning = false
         super.onDestroy()
     }
 
@@ -107,12 +119,6 @@ class TerminalKeepAliveService : Service() {
     }
 
     private fun buildNotification(): Notification {
-        val names = terminalNames
-        val text = if (names.isEmpty()) {
-            "保持 SSH 连接，防止退到后台被断开"
-        } else {
-            "当前已连接终端：${names.joinToString("、")}"
-        }
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
         } else {
@@ -120,8 +126,9 @@ class TerminalKeepAliveService : Service() {
             Notification.Builder(this)
         }
         return builder
-            .setContentTitle("QShell 终端运行中（${names.size}）")
-            .setContentText(text)
+            .setContentTitle("QShell 终端运行中")
+            .setContentText("当前连接终端数量 ${terminalNames.size}")
+            .setShowWhen(false)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
             .build()
@@ -130,6 +137,14 @@ class TerminalKeepAliveService : Service() {
     companion object {
         const val CHANNEL_ID = "qshell.terminal"
         const val NOTIFICATION_ID = 101
+
+        /// 服务是否在跑（供设置页诊断）
+        @Volatile
+        var isRunning: Boolean = false
+
+        /// WakeLock 是否持有（供设置页诊断）
+        @Volatile
+        var holdingWakeLock: Boolean = false
 
         /// 当前已连接的终端名称（Dart 侧每次连接/断开都会更新）
         @Volatile
