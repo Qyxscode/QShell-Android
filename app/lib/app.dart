@@ -24,7 +24,7 @@ const _transitions = PageTransitionsTheme(
   },
 );
 
-class QShellApp extends StatelessWidget {
+class QShellApp extends StatefulWidget {
   const QShellApp({
     super.key,
     required this.controller,
@@ -39,21 +39,60 @@ class QShellApp extends StatelessWidget {
   final Color? dynamicAccent;
 
   @override
+  State<QShellApp> createState() => _QShellAppState();
+}
+
+class _QShellAppState extends State<QShellApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // 从后台回来时系统亮度可能已经变了，结构重建一次
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// 系统日夜切换：背景层在 MaterialApp 之外，不会自己跟着变，
+  /// 必须在这里主动重建，否则会出现「主页还是日间、二级页面已是夜间」。
+  @override
+  void didChangePlatformBrightness() {
+    if (mounted) setState(() {});
+  }
+
+  /// App 从后台恢复：部分 ROM 不回调 didChangePlatformBrightness，
+  /// 只在恢复时补一次重建。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable>[controller, localeController]),
+      animation: Listenable.merge(
+        <Listenable>[widget.controller, widget.localeController],
+      ),
       builder: (context, _) {
-        final design = DesignLanguage.resolve(controller.designLanguage);
-        final useDynamic = controller.useDynamicColor && dynamicAccent != null;
-        final effectiveSeed = useDynamic ? dynamicAccent! : controller.seed;
+        final design = DesignLanguage.resolve(widget.controller.designLanguage);
+        final useDynamic =
+            widget.controller.useDynamicColor && widget.dynamicAccent != null;
+        final effectiveSeed =
+            useDynamic ? widget.dynamicAccent! : widget.controller.seed;
 
         return ThemeScope(
-          controller: controller,
+          controller: widget.controller,
           child: LocaleScope(
-            controller: localeController,
+            controller: widget.localeController,
             child: AppStringsScope(
               // 文案作用域包在 MaterialApp 外：push 出来的页面也能拿到
-              strings: AppStrings.forLanguage(localeController.language),
+              strings: AppStrings.forLanguage(widget.localeController.language),
               child: Builder(
                 builder: (innerContext) {
                   // 这里还在 MaterialApp 之外，用平台亮度推断当前明暗
@@ -61,7 +100,7 @@ class QShellApp extends StatelessWidget {
                       View.of(innerContext).platformDispatcher
                               .platformBrightness ==
                           Brightness.dark;
-                  final isDark = switch (controller.themeMode) {
+                  final isDark = switch (widget.controller.themeMode) {
                     ThemeMode.dark => true,
                     ThemeMode.light => false,
                     ThemeMode.system => platformDark,
@@ -92,8 +131,8 @@ class QShellApp extends StatelessWidget {
                                       ? Brightness.dark
                                       : Brightness.light,
                                   background: tokens.background,
-                                  wallpaper: controller.wallpaper,
-                                  wallpaperDim: controller.wallpaperDim,
+                                  wallpaper: widget.controller.wallpaper,
+                                  wallpaperDim: widget.controller.wallpaperDim,
                                   child: const SizedBox.expand(),
                                 )
                               : ColoredBox(
@@ -118,9 +157,9 @@ class QShellApp extends StatelessWidget {
                                 seed: effectiveSeed,
                               )
                               .copyWith(pageTransitionsTheme: _transitions),
-                          themeMode: controller.themeMode,
+                          themeMode: widget.controller.themeMode,
                           // 不配这段，文本框长按的「复制/粘贴/全选」会走英文默认实现
-                          locale: localeController.language ==
+                          locale: widget.localeController.language ==
                                   AppLanguage.zhHant
                               ? const Locale('zh', 'TW')
                               : const Locale('zh', 'CN'),

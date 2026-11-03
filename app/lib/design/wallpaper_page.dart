@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../state/theme_scope.dart';
+import 'glass_design_system.dart';
 import 'tokens.dart';
 
 /// 给「push 出来的页面」提供一层不透明背景。
@@ -33,8 +34,16 @@ class WallpaperPage extends StatelessWidget {
     );
 
     if (path == null || path.isEmpty) {
-      // 没有壁纸：用主题底色兜底（同样是不透明的）
-      return ColoredBox(color: tokens.background, child: child);
+      // 没有壁纸：必须复用主页同款的光斑背景。
+      // 只画纯色会让二级页面变成一块死板的底色，和主页明显割裂。
+      return GlassBackdrop(
+        accent: tokens.accent,
+        brightness: Theme.of(context).brightness,
+        background: tokens.background,
+        wallpaper: null,
+        wallpaperDim: dim,
+        child: child,
+      );
     }
 
     return Stack(
