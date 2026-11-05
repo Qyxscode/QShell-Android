@@ -1,5 +1,8 @@
+import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'video_preview_page.dart';
+import '../../design/instant_route.dart';
 import 'image_preview_page.dart';
 import '../../design/glass_sheet.dart';
 import '../../design/glass_dialog.dart';
@@ -23,6 +26,7 @@ Future<FileAction?> showFileActionSheet(
 }) {
   final tokens = AppTokens.of(context);
   final text = Theme.of(context).textTheme;
+  developer.log('menu=$name label=${openActionLabel(name)}', name: 'QShell');
   return showGlassSheet<FileAction>(
     context,
     title: '',
@@ -51,14 +55,27 @@ Future<FileAction?> showFileActionSheet(
           ),
           if (!isDirectory) ...[
             ListTile(
-              leading: Icon(Icons.open_in_new_rounded, color: tokens.accent),
-              title: Text(AppStrings.of(context).filesOpen),
+              leading: Icon(
+                isPlayableVideo(name)
+                    ? Icons.play_circle_outline_rounded
+                    : isPreviewableImage(name)
+                        ? Icons.image_outlined
+                        : Icons.open_in_new_rounded,
+                color: tokens.accent,
+              ),
+              title: Text(openActionLabel(name)),
+              subtitle: isPlayableVideo(name)
+                  ? const Text('在线播放，边下边播')
+                  : isPreviewableImage(name)
+                      ? const Text('应用内查看')
+                      : null,
               onTap: () => close(FileAction.open),
             ),
             ListTile(
               leading: Icon(Icons.download_rounded, color: tokens.accent),
               title: Text(AppStrings.of(context).filesDownload),
-              subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text('保存到本地 · $subtitle',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
               onTap: () => close(FileAction.download),
             ),
           ],
@@ -85,6 +102,30 @@ Future<FileAction?> showFileActionSheet(
   );
 }
 
+/// 按文件类型给「打开」换成更明确的文案。
+String openActionLabel(String name) {
+  final dot = name.lastIndexOf('.');
+  final ext = dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
+  if (const {'mp4', 'mkv', 'avi', 'mov', 'flv', 'webm', 'm4v', '3gp'}
+      .contains(ext)) {
+    return '播放';
+  }
+  if (const {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif'}
+      .contains(ext)) {
+    return '预览';
+  }
+  if (ext == 'apk' || ext == 'aab') return '安装';
+  return '打开';
+}
+
+/// 视频扩展名：应用内播放。
+bool isPlayableVideo(String name) {
+  final dot = name.lastIndexOf('.');
+  if (dot < 0) return false;
+  const exts = {'mp4', 'mkv', 'avi', 'mov', 'flv', 'webm', 'm4v', '3gp'};
+  return exts.contains(name.substring(dot + 1).toLowerCase());
+}
+
 /// 图片扩展名：这些类型走应用内预览，不交给系统相册。
 bool isPreviewableImage(String name) {
   final dot = name.lastIndexOf('.');
@@ -102,18 +143,38 @@ Future<String> downloadToCacheAndOpen(
   String name,
   Future<void> Function(String localPath) downloader, {
   BuildContext? context,
+  /// 同目录里的其他图片：传了就进图库，可左右翻页
+  List<ImagePreviewItem>? gallery,
+  int galleryStart = 0,
 }) async {
   final dir = await getTemporaryDirectory();
   final target = File('${dir.path}/$name');
   await downloader(target.path);
   if (!await target.exists()) return target.path;
 
+  if (context != null && context.mounted && isPlayableVideo(name)) {
+    if (context.mounted) {
+      await Navigator.of(context).push(
+        InstantPageRoute<void>(
+          builder: (_) => VideoPreviewPage(name: name, filePath: target.path),
+        ),
+      );
+    }
+    return target.path;
+  }
   if (context != null && context.mounted && isPreviewableImage(name)) {
     final bytes = await target.readAsBytes();
     if (context.mounted) {
+      // 有同目录图片列表就进图库，否则退化成单图
+      final items = gallery ??
+          [ImagePreviewItem(name: name, bytes: bytes)];
+      if (gallery != null) items[galleryStart].bytes = bytes;
       await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => ImagePreviewPage(bytes: bytes, name: name),
+        InstantPageRoute<void>(
+          builder: (_) => ImagePreviewPage(
+            items: items,
+            initialIndex: gallery == null ? 0 : galleryStart,
+          ),
         ),
       );
     }
@@ -187,4 +248,21 @@ Future<String?> askNewName(BuildContext context, String current) async {
   );
   if (result == null || result.isEmpty || result == current) return null;
   return result;
+}
+
+/// 清理「打开」时落到临时目录的文件。
+///
+/// 这些文件只在交给系统应用或预览时用一次，留着只会越积越多。
+Future<void> clearOpenCache() async {
+  try {
+    final dir = await getTemporaryDirectory();
+    if (!dir.existsSync()) return;
+    for (final e in dir.listSync()) {
+      try {
+        await e.delete(recursive: true);
+      } catch (_) {
+        // 正在被播放器占用的文件删不掉，跳过
+      }
+    }
+  } catch (_) {}
 }

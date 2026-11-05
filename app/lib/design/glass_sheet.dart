@@ -17,10 +17,14 @@ Future<T?> showGlassSheet<T>(
   required Widget Function(BuildContext context, void Function(T? result) close)
       builder,
   WidgetBuilder? actions,
-  double maxHeightFactor = 0.78,
+  double maxHeightFactor = 0.92,
   bool dismissible = true,
   /// 为 false 时隐藏拖拽条与标题（用于纯动作菜单）
   bool showHeader = true,
+
+  /// 内容是否由弹层自己滚动。传 false 时内容自己管理滚动
+  /// （需要让底部按钮固定时用）。
+  bool scrollable = true,
 }) {
   return showGeneralDialog<T>(
     context: context,
@@ -35,6 +39,7 @@ Future<T?> showGlassSheet<T>(
       maxHeightFactor: maxHeightFactor,
       dismissible: dismissible,
       showHeader: showHeader,
+      scrollable: scrollable,
     ),
     transitionBuilder: (context, animation, secondary, child) {
       final curve = CurvedAnimation(
@@ -65,6 +70,7 @@ class _GlassSheetPage<T> extends StatefulWidget {
     required this.maxHeightFactor,
     required this.dismissible,
     required this.showHeader,
+    required this.scrollable,
   });
 
   final String title;
@@ -74,6 +80,7 @@ class _GlassSheetPage<T> extends StatefulWidget {
   final double maxHeightFactor;
   final bool dismissible;
   final bool showHeader;
+  final bool scrollable;
 
   @override
   State<_GlassSheetPage<T>> createState() => _GlassSheetPageState<T>();
@@ -90,18 +97,36 @@ class _GlassSheetPageState<T> extends State<_GlassSheetPage<T>> {
     final tokens = AppTokens.of(context);
     final text = Theme.of(context).textTheme;
     final media = MediaQuery.of(context);
-    final maxHeight = media.size.height * widget.maxHeightFactor;
+    // 可用高度：扣掉键盘、手势条、上下留白后剩下的空间
+    final availableHeight = media.size.height -
+        media.viewInsets.bottom -
+        media.viewPadding.bottom -
+        media.viewPadding.top -
+        26;
+    final maxHeight = availableHeight < media.size.height * widget.maxHeightFactor
+        ? availableHeight
+        : media.size.height * widget.maxHeightFactor;
 
     return PopScope(
       canPop: widget.dismissible,
       child: Stack(
         children: [
-          Positioned(
-            left: 10,
-            right: 10,
-            // 让出键盘与手势条
-            bottom: 10 + media.viewInsets.bottom + media.viewPadding.bottom,
-            child: GestureDetector(
+          // 用 Padding + Align 而不是 Positioned 只改底边：
+          // 键盘弹出时面板会被整体上推、顶出屏幕顶部，底部按钮反而被遮住。
+          // 这里把可用区域压出来，面板在其中贴底并按需收缩。
+          Positioned.fill(
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: 10,
+                right: 10,
+                top: 16 + media.viewPadding.top,
+                bottom: 10 +
+                    media.viewInsets.bottom +
+                    media.viewPadding.bottom,
+              ),
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: GestureDetector(
               onVerticalDragUpdate: (details) {
                 if (!widget.dismissible) return;
                 final next = _drag + details.delta.dy;
@@ -158,11 +183,16 @@ class _GlassSheetPageState<T> extends State<_GlassSheetPage<T>> {
                         ),
                         const SizedBox(height: 14),
                         ],
-                        Flexible(
-                          child: SingleChildScrollView(
-                            child: widget.builder(context, _close),
-                          ),
-                        ),
+                        if (widget.scrollable)
+                          Flexible(
+                            child: SingleChildScrollView(
+                              // 内容不够高时不产生回弹空白
+                              physics: const ClampingScrollPhysics(),
+                              child: widget.builder(context, _close),
+                            ),
+                          )
+                        else
+                          Flexible(child: widget.builder(context, _close)),
                         if (widget.actions != null) ...[
                           const SizedBox(height: 16),
                           widget.actions!(context),
@@ -170,6 +200,8 @@ class _GlassSheetPageState<T> extends State<_GlassSheetPage<T>> {
                       ],
                     ),
                   ),
+                ),
+              ),
                 ),
               ),
             ),

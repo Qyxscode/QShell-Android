@@ -46,6 +46,7 @@ dependencies:
   ftpconnect: ^2.0.10
   dart_smb2: ^0.2.3
   open_filex: ^5.0.0
+  video_player: ^2.9.2
   url_launcher: ^6.3.3
   flutter_localizations:
     sdk: flutter

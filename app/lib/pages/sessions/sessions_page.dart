@@ -204,13 +204,7 @@ class _SessionsPageState extends State<SessionsPage> {
       context,
       title: '',
       showHeader: false,
-      builder: (context, close) => Padding(
-        // 键盘弹起时把表单整体顶上去，避免输入框被挡住
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: const _HostEditSheet(),
-      ),
+      builder: (context, close) => const _HostEditSheet(),
     );
     if (host == null) return;
     final groups = await _store.addHost(host);

@@ -1,3 +1,7 @@
+import 'dart:io';
+
+import 'image_preview_page.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../design/glass_input_dialog.dart';
 import '../../design/glass_dialog.dart';
@@ -154,6 +158,31 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
       _cancelRequested = false;
     });
     try {
+      // 同目录图片一起带进图库，支持左右翻页；其余按需下载
+      final images = _entries
+          .where((e) => !e.isDirectory && isPreviewableImage(e.name))
+          .toList();
+      var startIndex = images.indexWhere((e) => e.path == entry.path);
+      if (startIndex < 0) {
+        images.insert(0, entry);
+        startIndex = 0;
+      }
+      final gallery = images
+          .map(
+            (e) => ImagePreviewItem(
+              name: e.name,
+              bytes: null,
+              loader: () async {
+                final tmp = File(
+                  '${(await getTemporaryDirectory()).path}/${e.name}',
+                );
+                await fs.download(e.path, tmp.path);
+                return tmp.readAsBytes();
+              },
+            ),
+          )
+          .toList();
+
       await downloadToCacheAndOpen(entry.name, (localPath) async {
         await fs.download(
           entry.path,
@@ -167,7 +196,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
           },
           isCancelled: () => _cancelRequested,
         );
-      }, context: context);
+      }, context: context, gallery: gallery, galleryStart: startIndex);
     } on TransferCancelled {
       // 忽略
     } catch (e) {

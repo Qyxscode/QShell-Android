@@ -1,4 +1,7 @@
 import 'dart:io';
+
+import 'image_preview_page.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../design/glass_input_dialog.dart';
 import '../../design/glass_dialog.dart';
 import '../../design/glass_toast.dart';
@@ -174,6 +177,40 @@ class _SftpBrowserPageState extends State<SftpBrowserPage> {
       _cancelRequested = false;
     });
     try {
+      // 同目录图片一起带进图库
+      final images = _entries
+          .where((e) => !e.isDirectory && isPreviewableImage(e.name))
+          .toList();
+      var startIndex = images.indexWhere((e) => e.path == entry.path);
+      if (startIndex < 0) {
+        images.insert(0, entry);
+        startIndex = 0;
+      }
+      final gallery = images
+          .map(
+            (e) => ImagePreviewItem(
+              name: e.name,
+              bytes: null,
+              loader: () async {
+                final tmp = File(
+                  '${(await getTemporaryDirectory()).path}/${e.name}',
+                );
+                final sink = tmp.openWrite();
+                try {
+                  await sftp.downloadTo(
+                    e.path,
+                    (bytes, chunk) => sink.add(chunk),
+                  );
+                  await sink.flush();
+                } finally {
+                  await sink.close();
+                }
+                return tmp.readAsBytes();
+              },
+            ),
+          )
+          .toList();
+
       await downloadToCacheAndOpen(entry.name, (localPath) async {
         final sink = File(localPath).openWrite();
         try {
@@ -192,7 +229,7 @@ class _SftpBrowserPageState extends State<SftpBrowserPage> {
         } finally {
           await sink.close();
         }
-      }, context: context);
+      }, context: context, gallery: gallery, galleryStart: startIndex);
     } on _TransferCancelled {
       // 用户取消，忽略
     } catch (e) {

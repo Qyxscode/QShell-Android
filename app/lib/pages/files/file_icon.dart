@@ -109,6 +109,7 @@ class RemoteEntryTile extends StatelessWidget {
     this.iconColor,
     this.textColor,
     this.trailing,
+    this.thumbnail,
   });
 
   final String name;
@@ -119,6 +120,9 @@ class RemoteEntryTile extends StatelessWidget {
   final Color? iconColor;
   final Color? textColor;
   final Widget? trailing;
+
+  /// 图片缩略图（本地文件可直接用），有值时替代图标块
+  final Widget? thumbnail;
 
   @override
   Widget build(BuildContext context) {
@@ -139,19 +143,29 @@ class RemoteEntryTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
           child: Row(
             children: [
-              // 彩色图标块：靠形状 + 色调快速区分类型
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: tone.withValues(alpha: isDark ? 0.18 : 0.13),
+              // 图片优先显示缩略图，其余用彩色图标块区分类型
+              if (thumbnail != null)
+                ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: tone.withValues(alpha: isDark ? 0.28 : 0.18),
+                  child: SizedBox(
+                    width: 38,
+                    height: 38,
+                    child: thumbnail,
                   ),
+                )
+              else
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: tone.withValues(alpha: isDark ? 0.18 : 0.13),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: tone.withValues(alpha: isDark ? 0.28 : 0.18),
+                    ),
+                  ),
+                  child: Icon(kind.icon, size: 20, color: tone),
                 ),
-                child: Icon(kind.icon, size: 20, color: tone),
-              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
