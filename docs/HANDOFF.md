@@ -407,3 +407,32 @@ foreach ($pair in $map['a']) { $text.Replace($pair[0], $pair[1]) }
 ```
 
 本次因此把 `md3_design_system.dart` 里所有 `i` 换成了 `m`。**Dart 源码只用 `edit`；非要用脚本时，先拿一个文件试写并 `git diff` 确认。**
+
+### 8.10 配置变更后页面不刷新（重启才生效）
+
+**现象**：WebDAV 备份恢复完成后，SSH 主机不出现在会话列表，必须重启 App。
+
+**原因**：会话页和节点监视都常驻在 `AppShell` 的 `PageView` 里（带 `AutomaticKeepAlive`），只在 `initState` 读一次配置，之后永远不重建。恢复备份只是写 SharedPreferences，没有任何东西通知它们。
+
+**修复**：`QShellConfigStore` 增加静态通知器：
+
+```dart
+static final ValueNotifier<int> revision = ValueNotifier<int>(0);
+static void _bumpRevision() => revision.value++;
+```
+
+`importFromBytes` / `addHost` / `updateHost` / `removeHost` / `clear` 之后都 bump；`SessionsPage`、`MonitorPage` 在 `initState` 里 `addListener`、`dispose` 里 `removeListener`，回调里 `_load()`。
+
+**新页面要读配置时照这个模式订阅**，别再依赖"重建页面"。
+
+### 8.11 节点监视不再自动全选
+
+**现象**：添加主机后，节点监视里自动出现全部主机，用户没得选。
+
+**原因**：`MonitorPage._load()` 里 `prefs.getStringList('monitor.selected') == null` 时默认全选。
+
+**修复**：
+
+- 默认空集合：`_selected = saved?.toSet() ?? <String>{}`
+- 顶栏按钮从 `sync` 图标换成 `+`（tooltip「添加监控主机」），点开就是带复选框的主机多选面板（全选 / 清空 / 确认），选择结果存 `monitor.selected`
+- 手动添加（二维码扫描等）的节点仍然独立存在，不受影响
