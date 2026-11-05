@@ -46,6 +46,25 @@ class SystemChannel(private val activity: MainActivity) {
             "cellularInfo" -> result.success(cellularInfo())
             "trafficInfo" -> result.success(trafficInfo())
             // 把文件保存到系统「下载」目录（Android 10+ 用 MediaStore，不需要存储权限）
+            // 列出 Download/QShell 下的文件（分区存储下只能用 MediaStore 查询）
+            "listDownloads" -> {
+                Thread {
+                    val list = runCatching { listDownloads() }.getOrElse { emptyList() }
+                    activity.runOnUiThread { result.success(list) }
+                }.start()
+            }
+            // 删除 Download/QShell 下的某个文件
+            "deleteDownload" -> {
+                val uriText = call.argument<String>("uri") ?: ""
+                Thread {
+                    val ok = runCatching {
+                        activity.contentResolver.delete(
+                            android.net.Uri.parse(uriText), null, null,
+                        ) > 0
+                    }.getOrDefault(false)
+                    activity.runOnUiThread { result.success(ok) }
+                }.start()
+            }
             "saveToDownloads" -> {
                 val name = call.argument<String>("name") ?: ""
                 val bytes = call.argument<ByteArray>("bytes")
@@ -741,6 +760,49 @@ class SystemChannel(private val activity: MainActivity) {
 
     /// 写入系统下载目录，返回 content:// URI（API 29+）。
     /// 低版本没有 MediaStore.Downloads，返回 null，调用方回退到应用目录。
+    /// 查询 Download/QShell 里的文件。分区存储下无法用 File API 直接读这个目录。
+    private fun listDownloads(): List<Map<String, Any>> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return emptyList()
+        val resolver = activity.contentResolver
+        val projection = arrayOf(
+            android.provider.MediaStore.Downloads._ID,
+            android.provider.MediaStore.Downloads.DISPLAY_NAME,
+            android.provider.MediaStore.Downloads.SIZE,
+            android.provider.MediaStore.Downloads.DATE_MODIFIED,
+            android.provider.MediaStore.Downloads.MIME_TYPE,
+        )
+        val selection = "${android.provider.MediaStore.Downloads.RELATIVE_PATH} LIKE ?"
+        val args = arrayOf("${android.os.Environment.DIRECTORY_DOWNLOADS}/QShell%")
+        val out = mutableListOf<Map<String, Any>>()
+        resolver.query(
+            android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+            projection, selection, args,
+            "${android.provider.MediaStore.Downloads.DATE_MODIFIED} DESC",
+        )?.use { cursor ->
+            val idIdx = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Downloads._ID)
+            val nameIdx = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Downloads.DISPLAY_NAME)
+            val sizeIdx = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Downloads.SIZE)
+            val timeIdx = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Downloads.DATE_MODIFIED)
+            val mimeIdx = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Downloads.MIME_TYPE)
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(idIdx)
+                val contentUri = android.content.ContentUris.withAppendedId(
+                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, id,
+                )
+                out.add(
+                    mapOf(
+                        "name" to (cursor.getString(nameIdx) ?: ""),
+                        "size" to cursor.getLong(sizeIdx),
+                        "modified" to cursor.getLong(timeIdx) * 1000L,
+                        "mime" to (cursor.getString(mimeIdx) ?: ""),
+                        "uri" to contentUri.toString(),
+                    ),
+                )
+            }
+        }
+        return out
+    }
+
     private fun saveToDownloads(name: String, bytes: ByteArray): String? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
         val resolver = activity.contentResolver

@@ -186,7 +186,7 @@ class _FilesPageState extends State<FilesPage> {
             tooltip: '应用文件夹',
             onPressed: () async {
               await Navigator.of(context).push(
-                MaterialPageRoute<void>(
+                InstantPageRoute<void>(
                   builder: (_) => const AppFolderPage(),
                 ),
               );

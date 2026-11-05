@@ -646,9 +646,41 @@ class SystemService {
     }
   }
 
-  /// 启动/更新终端保活前台服务；[names] 是当前已连接的终端名称。
-  static Future<void> startKeepAlive([List<String> names = const []]) async {
+  /// 列出 Download/QShell 下的文件（MediaStore 查询，分区存储下只能这样读）。
+  static Future<List<DownloadEntry>> listDownloads() async {
     try {
+      final raw = await _channel.invokeListMethod<Map>('listDownloads');
+      if (raw == null) return const [];
+      return raw.map(DownloadEntry.fromMap).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// 读取 Download/QShell 下某个文件的内容。
+  static Future<List<int>?> readDownload(String uri) async {
+    try {
+      return await _channel.invokeMethod<Uint8List>('readDownload', {
+        'uri': uri,
+      });
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 删除 Download/QShell 下的文件。
+  static Future<bool> deleteDownload(String uri) async {
+    try {
+      final ok = await _channel.invokeMethod<bool>('deleteDownload', {
+        'uri': uri,
+      });
+      return ok ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> startKeepAlive([List<String> names = const []]) async {    try {
       await _channel.invokeMethod<void>('startKeepAlive', {'names': names});
     } catch (_) {
       // 忽略：部分 ROM 不允许前台服务，不影响主流程
@@ -873,4 +905,31 @@ class SystemService {
       return false;
     }
   }
+}
+
+/// Download/QShell 下的一个文件（来自 MediaStore，无法用 File API 直接访问）。
+class DownloadEntry {
+  const DownloadEntry({
+    required this.name,
+    required this.size,
+    required this.modified,
+    required this.mime,
+    required this.uri,
+  });
+
+  final String name;
+  final int size;
+  final int modified;
+  final String mime;
+
+  /// content:// URI，删除时需要
+  final String uri;
+
+  factory DownloadEntry.fromMap(Map raw) => DownloadEntry(
+        name: (raw['name'] as String?) ?? '',
+        size: (raw['size'] as num?)?.toInt() ?? 0,
+        modified: (raw['modified'] as num?)?.toInt() ?? 0,
+        mime: (raw['mime'] as String?) ?? '',
+        uri: (raw['uri'] as String?) ?? '',
+      );
 }

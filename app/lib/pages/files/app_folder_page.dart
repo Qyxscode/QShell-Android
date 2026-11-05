@@ -8,15 +8,18 @@ import '../../design/glass_dialog.dart';
 import '../../design/glass_input_dialog.dart';
 import '../../design/glass_sheet.dart';
 import '../../design/glass_toast.dart';
+import '../../design/instant_route.dart';
 import '../../design/tokens.dart';
 import '../../i18n/app_strings.dart';
+import '../../services/download_helper.dart';
+import '../../services/system_service.dart';
 import 'file_icon.dart';
 import 'image_preview_page.dart';
 
-/// 应用私有文件夹的管理页。
+/// 下载文件夹的管理页。
 ///
-/// 预览图片、临时下载转存的文件都落在这里，之前在系统文件管理器里很难找，
-/// 所以单独开一个入口直接浏览、改名、删除。
+/// 位置跟随「设置 → 下载位置」：应用私有目录 / Download/QShell。
+/// 两者数据来源不同（后者只能通过 MediaStore 读），所以分开渲染。
 class AppFolderPage extends StatefulWidget {
   const AppFolderPage({super.key});
 
@@ -25,11 +28,30 @@ class AppFolderPage extends StatefulWidget {
 }
 
 class _AppFolderPageState extends State<AppFolderPage> {
-  static const _folderName = 'QShell';
-
   Directory? _dir;
-  List<FileSystemEntity> _items = const [];
+  List<FileSystemEntity> _files = const [];
+  List<DownloadEntry> _downloads = const [];
+  String _location = DownloadHelper.appLocation;
   bool _loading = true;
+
+  bool get _isDownloads => _location == DownloadHelper.downloadsLocation;
+
+  int get _count => _isDownloads ? _downloads.length : _files.length;
+
+  int get _totalSize {
+    if (_isDownloads) {
+      return _downloads.fold(0, (sum, d) => sum + d.size);
+    }
+    var sum = 0;
+    for (final item in _files) {
+      if (item is File) {
+        try {
+          sum += item.lengthSync();
+        } catch (_) {}
+      }
+    }
+    return sum;
+  }
 
   @override
   void initState() {
@@ -39,23 +61,38 @@ class _AppFolderPageState extends State<AppFolderPage> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
+    final location = await DownloadHelper.getLocation();
+    if (location == DownloadHelper.downloadsLocation) {
+      final list = await SystemService.listDownloads();
+      if (!mounted) return;
+      setState(() {
+        _location = location;
+        _downloads = list;
+        _files = const [];
+        _dir = null;
+        _loading = false;
+      });
+      return;
+    }
     try {
       final docs = await getApplicationDocumentsDirectory();
-      final dir = Directory('${docs.path}/$_folderName');
+      final dir = Directory('${docs.path}/QShell');
       if (!dir.existsSync()) dir.createSync(recursive: true);
-      final items = dir.listSync()
+      final files = dir.listSync()
         ..sort((a, b) {
           final aDir = a is Directory;
           final bDir = b is Directory;
           if (aDir != bDir) return aDir ? -1 : 1;
-          return _baseName(a).toLowerCase().compareTo(
-                _baseName(b).toLowerCase(),
-              );
+          return _baseName(a)
+              .toLowerCase()
+              .compareTo(_baseName(b).toLowerCase());
         });
       if (!mounted) return;
       setState(() {
+        _location = location;
         _dir = dir;
-        _items = items;
+        _files = files;
+        _downloads = const [];
         _loading = false;
       });
     } catch (e) {
@@ -79,18 +116,6 @@ class _AppFolderPageState extends State<AppFolderPage> {
     return '${(bytes / 1024 / 1024 / 1024).toStringAsFixed(2)} GB';
   }
 
-  int get _totalSize {
-    var sum = 0;
-    for (final item in _items) {
-      if (item is File) {
-        try {
-          sum += item.lengthSync();
-        } catch (_) {}
-      }
-    }
-    return sum;
-  }
-
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
@@ -100,7 +125,7 @@ class _AppFolderPageState extends State<AppFolderPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('应用文件夹'),
+        title: Text(_isDownloads ? '下载文件夹' : '应用文件夹'),
         actions: [
           IconButton(
             tooltip: strings.filesRefresh,
@@ -111,17 +136,22 @@ class _AppFolderPageState extends State<AppFolderPage> {
       ),
       body: Column(
         children: [
-          // 路径 + 占用空间
+          // 当前位置 + 切换
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 2, 6, 6),
             child: Row(
               children: [
-                Icon(Icons.folder_special_rounded,
-                    size: 16, color: tokens.accent),
+                Icon(
+                  _isDownloads
+                      ? Icons.download_rounded
+                      : Icons.folder_special_rounded,
+                  size: 16,
+                  color: tokens.accent,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _dir?.path ?? '',
+                    _isDownloads ? 'Download/QShell' : (_dir?.path ?? ''),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: text.labelSmall?.copyWith(
@@ -132,11 +162,15 @@ class _AppFolderPageState extends State<AppFolderPage> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '${_items.length} 项 · ${_fmtSize(_totalSize)}',
+                  '$_count 项 · ${_fmtSize(_totalSize)}',
                   style: text.labelSmall?.copyWith(
                     fontSize: 11,
                     color: tokens.textSecondary,
                   ),
+                ),
+                TextButton(
+                  onPressed: _switchLocation,
+                  child: const Text('切换', style: TextStyle(fontSize: 12)),
                 ),
               ],
             ),
@@ -144,66 +178,118 @@ class _AppFolderPageState extends State<AppFolderPage> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : _items.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.folder_open_rounded,
-                                size: 44, color: tokens.textDisabled),
-                            const SizedBox(height: 12),
-                            Text(
-                              '这个文件夹还是空的',
-                              style: text.bodyMedium
-                                  ?.copyWith(color: tokens.textSecondary),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              '预览图片时的「保存」会存到这里',
-                              style: text.labelSmall
-                                  ?.copyWith(color: tokens.textDisabled),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 110),
-                        itemCount: _items.length,
-                        itemBuilder: (context, index) {
-                          final item = _items[index];
-                          final name = _baseName(item);
-                          final isDir = item is Directory;
-                          final size = item is File
-                              ? (() {
-                                  try {
-                                    return _fmtSize(item.lengthSync());
-                                  } catch (_) {
-                                    return '--';
-                                  }
-                                })()
-                              : '文件夹';
-                          return RemoteEntryTile(
-                            name: name,
-                            isDirectory: isDir,
-                            subtitle: size,
-                            onTap: () => _open(item),
-                            onLongPress: () => _showActions(item),
-                          );
-                        },
-                      ),
+                : _count == 0
+                    ? _empty(tokens, text)
+                    : _list(tokens, text),
           ),
         ],
       ),
     );
   }
 
+  Widget _empty(AppTokens tokens, TextTheme text) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            _isDownloads
+                ? Icons.download_done_rounded
+                : Icons.folder_open_rounded,
+            size: 44,
+            color: tokens.textDisabled,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _isDownloads ? 'Download/QShell 里还没有文件' : '这个文件夹还是空的',
+            style: text.bodyMedium?.copyWith(color: tokens.textSecondary),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '下载与「保存」会自动放到这里',
+            style: text.labelSmall?.copyWith(color: tokens.textDisabled),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _list(AppTokens tokens, TextTheme text) {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 110),
+      itemCount: _count,
+      itemBuilder: (context, index) {
+        if (_isDownloads) {
+          final d = _downloads[index];
+          return RemoteEntryTile(
+            name: d.name,
+            isDirectory: false,
+            subtitle: _fmtSize(d.size),
+            onTap: () => _openDownload(d),
+            onLongPress: () => _showDownloadActions(d),
+          );
+        }
+        final item = _files[index];
+        final name = _baseName(item);
+        final isDir = item is Directory;
+        final size = item is File
+            ? (() {
+                try {
+                  return _fmtSize(item.lengthSync());
+                } catch (_) {
+                  return '--';
+                }
+              })()
+            : '文件夹';
+        return RemoteEntryTile(
+          name: name,
+          isDirectory: isDir,
+          subtitle: size,
+          onTap: () => _open(item),
+          onLongPress: () => _showFileActions(item),
+        );
+      },
+    );
+  }
+
+  Future<void> _switchLocation() async {
+    final strings = AppStrings.of(context);
+    final choice = await showGlassSheet<String>(
+      context,
+      title: '下载位置',
+      builder: (context, close) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.folder_outlined),
+            title: Text(strings.settingsAppDir),
+            subtitle: Text(strings.settingsAppDirDesc),
+            trailing:
+                !_isDownloads ? const Icon(Icons.check_rounded) : null,
+            onTap: () => close(DownloadHelper.appLocation),
+          ),
+          ListTile(
+            leading: const Icon(Icons.download_rounded),
+            title: Text(strings.settingsDownloads),
+            subtitle: Text(strings.settingsDownloadsDesc),
+            trailing: _isDownloads ? const Icon(Icons.check_rounded) : null,
+            onTap: () => close(DownloadHelper.downloadsLocation),
+          ),
+        ],
+      ),
+    );
+    if (choice == null || !mounted) return;
+    await DownloadHelper.setLocation(choice);
+    await _load();
+  }
+
+  // ---------- 应用目录 ----------
+
   Future<void> _open(FileSystemEntity item) async {
     if (item is Directory) {
       if (!mounted) return;
       await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => _SubFolderPage(dir: item),
-        ),
+        InstantPageRoute<void>(builder: (_) => _SubFolderPage(dir: item)),
       );
       await _load();
       return;
@@ -214,7 +300,7 @@ class _AppFolderPageState extends State<AppFolderPage> {
       final bytes = await item.readAsBytes();
       if (!mounted) return;
       await Navigator.of(context).push(
-        MaterialPageRoute<void>(
+        InstantPageRoute<void>(
           builder: (_) => ImagePreviewPage(
             bytes: bytes,
             name: name,
@@ -236,47 +322,9 @@ class _AppFolderPageState extends State<AppFolderPage> {
     await OpenFilex.open(item.path);
   }
 
-  Future<void> _showActions(FileSystemEntity item) async {
-    final tokens = AppTokens.of(context);
-    final text = Theme.of(context).textTheme;
-    final name = _baseName(item);
-    final strings = AppStrings.of(context);
-
-    final action = await showGlassSheet<String>(
-      context,
-      title: name,
-      builder: (context, close) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _MenuRow(
-            icon: Icons.open_in_new_rounded,
-            label: strings.filesOpen,
-            color: tokens.accent,
-            tokens: tokens,
-            text: text,
-            onTap: () => close('open'),
-          ),
-          _MenuRow(
-            icon: Icons.drive_file_rename_outline_rounded,
-            label: '重命名',
-            color: tokens.textPrimary,
-            tokens: tokens,
-            text: text,
-            onTap: () => close('rename'),
-          ),
-          _MenuRow(
-            icon: Icons.delete_outline_rounded,
-            label: strings.commonDelete,
-            color: tokens.danger,
-            tokens: tokens,
-            text: text,
-            onTap: () => close('delete'),
-          ),
-        ],
-      ),
-    );
-
+  Future<void> _showFileActions(FileSystemEntity item) async {
+    final action = await _menu(_baseName(item));
+    if (!mounted || action == null) return;
     switch (action) {
       case 'open':
         await _open(item);
@@ -297,10 +345,7 @@ class _AppFolderPageState extends State<AppFolderPage> {
     );
     if (next == null || next.isEmpty || next == name || !mounted) return;
     try {
-      final parent = item.path.substring(
-        0,
-        item.path.length - name.length,
-      );
+      final parent = item.path.substring(0, item.path.length - name.length);
       await item.rename('$parent$next');
       await _load();
     } catch (e) {
@@ -310,11 +355,10 @@ class _AppFolderPageState extends State<AppFolderPage> {
   }
 
   Future<void> _remove(FileSystemEntity item) async {
-    final name = _baseName(item);
     final ok = await showGlassConfirm(
       context,
       title: AppStrings.of(context).commonDelete,
-      message: '确定删除「$name」？',
+      message: '确定删除「${_baseName(item)}」？',
       confirmText: AppStrings.of(context).commonDelete,
       danger: true,
     );
@@ -327,9 +371,111 @@ class _AppFolderPageState extends State<AppFolderPage> {
       showGlassToast(context, '删除失败：$e', tone: GlassToastTone.error);
     }
   }
+
+  // ---------- Download/QShell ----------
+
+  Future<void> _openDownload(DownloadEntry entry) async {
+    try {
+      final bytes = await SystemService.readDownload(entry.uri);
+      if (bytes == null) {
+        if (!mounted) return;
+        showGlassToast(context, '读取失败', tone: GlassToastTone.error);
+        return;
+      }
+      if (!mounted) return;
+      if (isPreviewableImageName(entry.name)) {
+        await Navigator.of(context).push(
+          InstantPageRoute<void>(
+            builder: (_) => ImagePreviewPage(
+              bytes: bytes,
+              name: entry.name,
+              onDelete: () async => SystemService.deleteDownload(entry.uri),
+            ),
+          ),
+        );
+        await _load();
+        return;
+      }
+      // 其他类型落到缓存再交给系统应用
+      final dir = await getTemporaryDirectory();
+      final target = File('${dir.path}/${entry.name}');
+      await target.writeAsBytes(bytes);
+      await OpenFilex.open(target.path);
+    } catch (e) {
+      if (!mounted) return;
+      showGlassToast(context, '打开失败：$e', tone: GlassToastTone.error);
+    }
+  }
+
+  Future<void> _showDownloadActions(DownloadEntry entry) async {
+    final action = await _menu(entry.name);
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'open':
+        await _openDownload(entry);
+      case 'delete':
+        final ok = await showGlassConfirm(
+          context,
+          title: AppStrings.of(context).commonDelete,
+          message: '确定删除「${entry.name}」？',
+          confirmText: AppStrings.of(context).commonDelete,
+          danger: true,
+        );
+        if (!ok || !mounted) return;
+        final done = await SystemService.deleteDownload(entry.uri);
+        if (!mounted) return;
+        if (done) {
+          await _load();
+        } else {
+          showGlassToast(context, '删除失败', tone: GlassToastTone.error);
+        }
+    }
+  }
+
+  /// 共用操作菜单。重命名只对应用内目录开放（MediaStore 改名需要额外权限）。
+  Future<String?> _menu(String title) {
+    final tokens = AppTokens.of(context);
+    final text = Theme.of(context).textTheme;
+    final strings = AppStrings.of(context);
+    return showGlassSheet<String>(
+      context,
+      title: title,
+      builder: (context, close) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _MenuRow(
+            icon: Icons.open_in_new_rounded,
+            label: strings.filesOpen,
+            color: tokens.accent,
+            tokens: tokens,
+            text: text,
+            onTap: () => close('open'),
+          ),
+          if (!_isDownloads)
+            _MenuRow(
+              icon: Icons.drive_file_rename_outline_rounded,
+              label: '重命名',
+              color: tokens.textPrimary,
+              tokens: tokens,
+              text: text,
+              onTap: () => close('rename'),
+            ),
+          _MenuRow(
+            icon: Icons.delete_outline_rounded,
+            label: strings.commonDelete,
+            color: tokens.danger,
+            tokens: tokens,
+            text: text,
+            onTap: () => close('delete'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-/// 子文件夹浏览（只读 + 删除），避免为多级目录再写一套管理器。
+/// 子文件夹（只读浏览）。
 class _SubFolderPage extends StatefulWidget {
   const _SubFolderPage({required this.dir});
 
@@ -352,7 +498,9 @@ class _SubFolderPageState extends State<_SubFolderPage> {
     try {
       setState(() {
         _items = widget.dir.listSync()
-          ..sort((a, b) => a.path.toLowerCase().compareTo(b.path.toLowerCase()));
+          ..sort(
+            (a, b) => a.path.toLowerCase().compareTo(b.path.toLowerCase()),
+          );
       });
     } catch (_) {}
   }
@@ -387,7 +535,7 @@ class _SubFolderPageState extends State<_SubFolderPage> {
                   onTap: item is Directory
                       ? () async {
                           await Navigator.of(context).push(
-                            MaterialPageRoute<void>(
+                            InstantPageRoute<void>(
                               builder: (_) => _SubFolderPage(dir: item),
                             ),
                           );
@@ -431,10 +579,7 @@ class _MenuRow extends StatelessWidget {
             children: [
               Icon(icon, size: 20, color: color),
               const SizedBox(width: 12),
-              Text(
-                label,
-                style: text.bodyMedium?.copyWith(color: color),
-              ),
+              Text(label, style: text.bodyMedium?.copyWith(color: color)),
             ],
           ),
         ),
