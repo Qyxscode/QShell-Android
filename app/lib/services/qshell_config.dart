@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:archive/archive.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 桌面版 QShell 的一条连接配置。
@@ -131,6 +132,15 @@ class QShellGroup {
 class QShellConfigStore {
   static const _kKey = 'qshell.config_json';
 
+  /// 配置版本号：任何写操作（导入 / 新增 / 修改 / 删除 / 清空）后自增。
+  ///
+  /// 会话列表、节点监视这些页面常驻在 PageView 里不会重建，
+  /// 以前从备份恢复完必须重启 App 才看得到新主机；现在它们订阅这个值，
+  /// 一变就重新 load。
+  static final ValueNotifier<int> revision = ValueNotifier<int>(0);
+
+  static void _bumpRevision() => revision.value++;
+
   /// 桌面版 managed_hosts（主机管理）在手机端的展示分组名
   static const String managedGroupName = '主机管理';
 
@@ -177,6 +187,7 @@ class QShellConfigStore {
   Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kKey);
+    _bumpRevision();
   }
 
   // ---------- 导入 ----------
@@ -188,6 +199,8 @@ class QShellConfigStore {
     final groups = _parseJson(rawJson);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kKey, rawJson);
+    // 让常驻的会话列表 / 节点监视立刻刷新，不用重启 App
+    _bumpRevision();
     return groups;
   }
 
@@ -223,6 +236,7 @@ class QShellConfigStore {
 
     final raw = jsonEncode(map);
     await prefs.setString(_kKey, raw);
+    _bumpRevision();
     return _parseJson(raw);
   }
 
@@ -343,6 +357,7 @@ class QShellConfigStore {
     map['devices'] = _groupDevices(rebuilt);
     final raw = jsonEncode(map);
     await prefs.setString(_kKey, raw);
+    _bumpRevision();
     return _parseJson(raw);
   }
 
@@ -372,6 +387,7 @@ class QShellConfigStore {
     map['devices'] = _groupDevices(flattened);
     final raw = jsonEncode(map);
     await prefs.setString(_kKey, raw);
+    _bumpRevision();
     return _parseJson(raw);
   }
 

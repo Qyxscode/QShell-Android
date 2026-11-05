@@ -85,10 +85,17 @@ class _MonitorPageState extends State<MonitorPage> {
   void initState() {
     super.initState();
     _load();
+    // 配置变了（恢复备份 / 增删主机）要重新对齐可选主机
+    QShellConfigStore.revision.addListener(_onConfigChanged);
+  }
+
+  void _onConfigChanged() {
+    if (mounted) _load();
   }
 
   @override
   void dispose() {
+    QShellConfigStore.revision.removeListener(_onConfigChanged);
     _timer?.cancel();
     super.dispose();
   }
@@ -111,13 +118,10 @@ class _MonitorPageState extends State<MonitorPage> {
       }
     }
 
-    // 没有选择记录时默认全选；有记录则按记录来
+    // 默认不监视任何配置主机，交给用户用顶栏「+」手动挑。
+    // 以前首次没有记录时直接全选，导致一导入配置就把所有主机塞进监视。
     final saved = prefs.getStringList(_selectedKey);
-    if (saved == null) {
-      _selected = all.map((item) => item.$1).toSet();
-    } else {
-      _selected = saved.toSet();
-    }
+    _selected = saved?.toSet() ?? <String>{};
 
     final configRuntimes = <_NodeRuntime>[
       for (final (id, host) in all)
@@ -420,9 +424,9 @@ class _MonitorPageState extends State<MonitorPage> {
         title: Text(AppStrings.of(context).settingsMonitorTitle),
         actions: [
           IconButton(
-            tooltip: AppStrings.of(context).settingsReadList,
+            tooltip: '添加监控主机',
             onPressed: _chooseNodes,
-            icon: const Icon(Icons.sync_rounded),
+            icon: const Icon(Icons.add_rounded),
           ),
           if (_nodes.isNotEmpty)
             IconButton(
