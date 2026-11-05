@@ -134,7 +134,12 @@ class GlassSurface extends StatelessWidget {
               ),
             ),
           ),
-        Padding(padding: padding, child: child),
+        // ListTile / InkWell 必须有 Material 祖先，否则运行时抛异常
+        // （浮层里没有 Scaffold，表现出来就是一整片灰）
+        Material(
+          type: MaterialType.transparency,
+          child: Padding(padding: padding, child: child),
+        ),
       ],
     );
   }

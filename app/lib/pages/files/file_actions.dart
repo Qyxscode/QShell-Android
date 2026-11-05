@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'image_preview_page.dart';
 import '../../design/glass_sheet.dart';
 import '../../design/glass_dialog.dart';
 import '../../design/glass_input_dialog.dart';
@@ -84,17 +85,42 @@ Future<FileAction?> showFileActionSheet(
   );
 }
 
+/// 图片扩展名：这些类型走应用内预览，不交给系统相册。
+bool isPreviewableImage(String name) {
+  final dot = name.lastIndexOf('.');
+  if (dot < 0) return false;
+  const exts = {
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif',
+  };
+  return exts.contains(name.substring(dot + 1).toLowerCase());
+}
+
 /// 把远程文件下载到缓存目录，然后交给系统应用打开。
+///
+/// 图片交给 ImagePreviewPage：系统相册能看但删不掉、也找不到源文件。
 Future<String> downloadToCacheAndOpen(
   String name,
-  Future<void> Function(String localPath) downloader,
-) async {
+  Future<void> Function(String localPath) downloader, {
+  BuildContext? context,
+}) async {
   final dir = await getTemporaryDirectory();
   final target = File('${dir.path}/$name');
   await downloader(target.path);
-  if (await target.exists()) {
-    await OpenFilex.open(target.path);
+  if (!await target.exists()) return target.path;
+
+  if (context != null && context.mounted && isPreviewableImage(name)) {
+    final bytes = await target.readAsBytes();
+    if (context.mounted) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ImagePreviewPage(bytes: bytes, name: name),
+        ),
+      );
+    }
+    return target.path;
   }
+
+  await OpenFilex.open(target.path);
   return target.path;
 }
 

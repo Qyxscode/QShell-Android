@@ -29,6 +29,18 @@ Future<String?> showGlassInput(
     barrierLabel: title,
     barrierColor: Colors.transparent,
     transitionDuration: const Duration(milliseconds: 200),
+    transitionBuilder: (context, animation, secondary, child) => ScaleTransition(
+      // 只做缩放，不套 FadeTransition：Opacity 会让 BackdropFilter 失效
+      scale: Tween<double>(begin: 0.96, end: 1).animate(
+        CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          // 退出也用 easeOut，否则收尾会跳帧
+          reverseCurve: Curves.easeOutCubic,
+        ),
+      ),
+      child: child,
+    ),
     pageBuilder: (context, animation, secondary) => _GlassInputView(
       title: title,
       message: message,

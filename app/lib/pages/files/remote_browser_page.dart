@@ -167,7 +167,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
           },
           isCancelled: () => _cancelRequested,
         );
-      });
+      }, context: context);
     } on TransferCancelled {
       // 忽略
     } catch (e) {
@@ -497,14 +497,8 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
                             itemCount: itemCount,
                             itemBuilder: (context, index) {
                               if (hasParent && index == 0) {
-                                return ListTile(
-                                  contentPadding:
-                                      const EdgeInsets.symmetric(horizontal: 6),
-                                  leading: Icon(Icons.arrow_upward_rounded,
-                                      size: 22, color: tokens.accent),
-                                  title: Text('返回上级',
-                                      style: text.bodyMedium?.copyWith(
-                                          color: tokens.textPrimary)),
+                                return ParentDirectoryTile(
+                                  label: '返回上级',
                                   onTap: () => _list(_parentPath),
                                 );
                               }

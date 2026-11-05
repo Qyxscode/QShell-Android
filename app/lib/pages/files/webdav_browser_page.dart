@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'image_preview_page.dart';
 import '../../design/glass_input_dialog.dart';
 import '../../design/glass_dialog.dart';
 import '../../design/glass_toast.dart';
@@ -143,6 +144,18 @@ class _WebdavBrowserPageState extends State<WebdavBrowserPage> {
       final dir = await Directory.systemTemp.createTemp('qshell_open');
       final file = File('${dir.path}/${entry.name}');
       await file.writeAsBytes(bytes);
+      if (_isImageName(entry.name)) {
+        if (!mounted) return;
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => ImagePreviewPage(
+              bytes: bytes,
+              name: entry.name,
+            ),
+          ),
+        );
+        return;
+      }
       await OpenFilex.open(file.path);
     } on _TransferCancelled {
       // 忽略
@@ -487,14 +500,8 @@ class _WebdavBrowserPageState extends State<WebdavBrowserPage> {
                             itemCount: itemCount,
                             itemBuilder: (context, index) {
                               if (hasParent && index == 0) {
-                                return ListTile(
-                                  contentPadding:
-                                      const EdgeInsets.symmetric(horizontal: 6),
-                                  leading: Icon(Icons.arrow_upward_rounded,
-                                      size: 22, color: tokens.accent),
-                                  title: Text('返回上级',
-                                      style: text.bodyMedium?.copyWith(
-                                          color: tokens.textPrimary)),
+                                return ParentDirectoryTile(
+                                  label: '返回上级',
                                   onTap: () => _list(_parentPath),
                                 );
                               }
@@ -538,4 +545,14 @@ class _WebdavBrowserPageState extends State<WebdavBrowserPage> {
     ),
   );
   }
+}
+
+/// 图片扩展名判断：这些类型在应用内预览，不走系统应用。
+bool _isImageName(String name) {
+  final dot = name.lastIndexOf('.');
+  if (dot < 0) return false;
+  const exts = {
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif',
+  };
+  return exts.contains(name.substring(dot + 1).toLowerCase());
 }

@@ -26,7 +26,7 @@ Future<T?> showGlassSheet<T>(
     context: context,
     barrierDismissible: dismissible,
     barrierLabel: title,
-    barrierColor: Colors.transparent,
+    barrierColor: const Color(0x52000000),
     transitionDuration: const Duration(milliseconds: 260),
     pageBuilder: (context, animation, secondary) => _GlassSheetPage<T>(
       title: title,
@@ -40,17 +40,18 @@ Future<T?> showGlassSheet<T>(
       final curve = CurvedAnimation(
         parent: animation,
         curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
+        // 退出必须 easeOut 系：easeIn 先慢后快，最后一帧跳完，看着像卡一下
+        reverseCurve: Curves.easeOutCubic,
       );
-      return FadeTransition(
-        opacity: curve,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 0.12),
-            end: Offset.zero,
-          ).animate(curve),
-          child: child,
-        ),
+      // 只能用位移，不能套 FadeTransition / Opacity：
+      // Opacity 会把 BackdropFilter 变成离屏层，模糊要等动画结束才生效
+      // （表现为「先出现一块透明面板，之后才变模糊」）。
+      return SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.12),
+          end: Offset.zero,
+        ).animate(curve),
+        child: child,
       );
     },
   );
@@ -95,12 +96,6 @@ class _GlassSheetPageState<T> extends State<_GlassSheetPage<T>> {
       canPop: widget.dismissible,
       child: Stack(
         children: [
-          // 遮罩：0.32 是上限，再深模糊会发灰
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.dismissible ? _close : null,
-            child: const ColoredBox(color: Color(0x52000000)),
-          ),
           Positioned(
             left: 10,
             right: 10,

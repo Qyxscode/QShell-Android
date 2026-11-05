@@ -24,8 +24,20 @@ Future<bool> showGlassConfirm(
     context: context,
     barrierDismissible: true,
     barrierLabel: title,
-    barrierColor: Colors.transparent,
+    barrierColor: const Color(0x4D000000),
     transitionDuration: const Duration(milliseconds: 200),
+    transitionBuilder: (context, animation, secondary, child) => ScaleTransition(
+      // 只做缩放，不套 FadeTransition：Opacity 会让 BackdropFilter 失效
+      scale: Tween<double>(begin: 0.96, end: 1).animate(
+        CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          // 退出也用 easeOut，否则收尾会跳帧
+          reverseCurve: Curves.easeOutCubic,
+        ),
+      ),
+      child: child,
+    ),
     pageBuilder: (context, animation, secondary) => _GlassConfirmView(
       title: title,
       message: message,
@@ -87,20 +99,7 @@ class _GlassConfirmViewState extends State<_GlassConfirmView>
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) widget.onClose(false);
       },
-      child: Stack(
-        children: [
-          // 遮罩：0.30 是上限，再深会让模糊后的内容发灰
-          AnimatedBuilder(
-            animation: curve,
-            builder: (context, _) => GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => widget.onClose(false),
-              child: ColoredBox(
-                color: Colors.black.withValues(alpha: 0.30 * curve.value),
-              ),
-            ),
-          ),
-          Center(
+      child: Center(
             child: AnimatedBuilder(
               animation: curve,
               builder: (context, child) => Transform.scale(
@@ -173,8 +172,6 @@ class _GlassConfirmViewState extends State<_GlassConfirmView>
               ),
             ),
           ),
-        ],
-      ),
     );
   }
 }
@@ -245,8 +242,20 @@ Future<void> showGlassInfo(
     context: context,
     barrierDismissible: true,
     barrierLabel: title,
-    barrierColor: Colors.transparent,
+    barrierColor: const Color(0x4D000000),
     transitionDuration: const Duration(milliseconds: 200),
+    transitionBuilder: (context, animation, secondary, child) => ScaleTransition(
+      // 只做缩放，不套 FadeTransition：Opacity 会让 BackdropFilter 失效
+      scale: Tween<double>(begin: 0.96, end: 1).animate(
+        CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          // 退出也用 easeOut，否则收尾会跳帧
+          reverseCurve: Curves.easeOutCubic,
+        ),
+      ),
+      child: child,
+    ),
     pageBuilder: (context, animation, secondary) => _GlassInfoView(
       title: title,
       content: content,
@@ -297,19 +306,7 @@ class _GlassInfoViewState extends State<_GlassInfoView>
 
     return PopScope(
       canPop: true,
-      child: Stack(
-        children: [
-          AnimatedBuilder(
-            animation: curve,
-            builder: (context, _) => GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: widget.onClose,
-              child: ColoredBox(
-                color: Colors.black.withValues(alpha: 0.30 * curve.value),
-              ),
-            ),
-          ),
-          Center(
+      child: Center(
             child: AnimatedBuilder(
               animation: curve,
               builder: (context, child) => Transform.scale(
@@ -360,8 +357,6 @@ class _GlassInfoViewState extends State<_GlassInfoView>
               ),
             ),
           ),
-        ],
-      ),
     );
   }
 }

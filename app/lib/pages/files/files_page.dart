@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_folder_page.dart';
 import '../../design/glass_sheet.dart';
 import '../../design/glass_dialog.dart';
 import '../../design/glass_toast.dart';
@@ -181,6 +182,18 @@ class _FilesPageState extends State<FilesPage> {
       appBar: AppBar(
         title: Text(AppStrings.of(context).filesTitle),
         actions: [
+          IconButton(
+            tooltip: '应用文件夹',
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const AppFolderPage(),
+                ),
+              );
+              _load();
+            },
+            icon: const Icon(Icons.folder_special_rounded),
+          ),
           IconButton(
             tooltip: AppStrings.of(context).filesRefresh,
             onPressed: _load,

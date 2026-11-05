@@ -192,7 +192,7 @@ class _SftpBrowserPageState extends State<SftpBrowserPage> {
         } finally {
           await sink.close();
         }
-      });
+      }, context: context);
     } on _TransferCancelled {
       // 用户取消，忽略
     } catch (e) {
@@ -483,14 +483,8 @@ class _SftpBrowserPageState extends State<SftpBrowserPage> {
                             itemCount: itemCount,
                             itemBuilder: (context, index) {
                               if (hasParent && index == 0) {
-                                return ListTile(
-                                  contentPadding:
-                                      const EdgeInsets.symmetric(horizontal: 6),
-                                  leading: Icon(Icons.arrow_upward_rounded,
-                                      size: 22, color: tokens.accent),
-                                  title: Text('返回上级',
-                                      style: text.bodyMedium?.copyWith(
-                                          color: tokens.textPrimary)),
+                                return ParentDirectoryTile(
+                                  label: '返回上级',
                                   onTap: () => _list(_parentPath),
                                 );
                               }
