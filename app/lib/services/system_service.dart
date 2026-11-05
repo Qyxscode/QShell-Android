@@ -897,6 +897,15 @@ class SystemService {
     }
   }
 
+  /// 请求读取媒体库权限（Android 13+ 读 MediaStore 内容需要）。
+  static Future<bool> requestMediaImages() async {
+    try {
+      return await _channel.invokeMethod<bool>('requestMediaImages') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<bool> requestPhonePermission() async {
     try {
       return await _channel.invokeMethod<bool>('requestPhonePermission') ??

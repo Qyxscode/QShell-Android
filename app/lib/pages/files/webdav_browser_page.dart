@@ -1,4 +1,6 @@
 import 'package:file_picker/file_picker.dart';
+import 'video_preview_page.dart';
+import '../../design/instant_route.dart';
 import 'image_preview_page.dart';
 import '../../design/glass_input_dialog.dart';
 import '../../design/glass_dialog.dart';
@@ -109,7 +111,16 @@ class _WebdavBrowserPageState extends State<WebdavBrowserPage> {
     if (action == null || !mounted) return;
     switch (action) {
       case FileAction.open:
-        await _open(entry);
+        // 内联判断，不依赖任何外部函数：直接看扩展名
+        final n = entry.name.toLowerCase();
+        const videoExts = [
+          '.mp4', '.mkv', '.mov', '.avi', '.flv', '.webm', '.m4v', '.3gp',
+        ];
+        if (videoExts.any(n.endsWith)) {
+          await _playOnline(entry);
+        } else {
+          await _open(entry);
+        }
       case FileAction.download:
         await _download(entry);
       case FileAction.rename:
@@ -121,7 +132,30 @@ class _WebdavBrowserPageState extends State<WebdavBrowserPage> {
     }
   }
 
+  /// 在线播放：只把 URL 交给播放器，边下边播，不预先下载整个文件。
+  Future<void> _playOnline(WebdavEntry entry) async {
+    final url = _client.uriOf(entry.href).toString();
+    await Navigator.of(context).push(
+      InstantPageRoute<void>(
+        builder: (_) => VideoPreviewPage(
+          name: entry.name,
+          networkUrl: url,
+          httpHeaders: _client.authHeaders,
+        ),
+      ),
+    );
+  }
+
   Future<void> _open(WebdavEntry entry) async {
+    // 视频走在线播放（这里再兜一层，避免别的入口漏判）
+    final lower = entry.name.toLowerCase();
+    const videoExts = [
+      '.mp4', '.mkv', '.mov', '.avi', '.flv', '.webm', '.m4v', '.3gp',
+    ];
+    if (videoExts.any(lower.endsWith)) {
+      await _playOnline(entry);
+      return;
+    }
     setState(() {
       _transferName = entry.name;
       _transferTotal = entry.size;
@@ -146,11 +180,33 @@ class _WebdavBrowserPageState extends State<WebdavBrowserPage> {
       await file.writeAsBytes(bytes);
       if (_isImageName(entry.name)) {
         if (!mounted) return;
+        // 同目录里的图片一起带去图库，左右滑动可翻页；
+        // 其他图片按需下载，点到才拉，避免一次拖几百张。
+        final images = _entries
+            .where((e) => !e.isDirectory && _isImageName(e.name))
+            .toList();
+        var startIndex = images.indexWhere((e) => e.href == entry.href);
+        if (startIndex < 0) {
+          images.insert(0, entry);
+          startIndex = 0;
+        }
+        final items = <ImagePreviewItem>[];
+        for (var i = 0; i < images.length; i++) {
+          final e = images[i];
+          items.add(
+            ImagePreviewItem(
+              name: e.name,
+              bytes: i == startIndex ? bytes : null,
+              loader: () => _client.download(e.href),
+            ),
+          );
+        }
+        if (!mounted) return;
         await Navigator.of(context).push(
-          MaterialPageRoute<void>(
+          InstantPageRoute<void>(
             builder: (_) => ImagePreviewPage(
-              bytes: bytes,
-              name: entry.name,
+              items: items,
+              initialIndex: startIndex,
             ),
           ),
         );

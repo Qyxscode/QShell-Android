@@ -43,6 +43,9 @@ class WebdavClient {
             'Basic ${base64Encode(utf8.encode('$username:$password'))}',
       };
 
+  /// 供视频流式播放等外部场景使用（网络请求需要同样的认证头）。
+  Map<String, String> get authHeaders => _authHeaders;
+
   /// 内部一律用「相对 baseUrl 的路径」（'' 表示根），
   /// 这里再拼回完整 URL，并用 pathSegments 让中文等字符正确编码。
   Uri _resolve(String relativePath) {

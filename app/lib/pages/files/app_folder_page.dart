@@ -13,6 +13,7 @@ import '../../design/tokens.dart';
 import '../../i18n/app_strings.dart';
 import '../../services/download_helper.dart';
 import '../../services/system_service.dart';
+import 'file_actions.dart';
 import 'file_icon.dart';
 import 'image_preview_page.dart';
 
@@ -59,10 +60,19 @@ class _AppFolderPageState extends State<AppFolderPage> {
     _load();
   }
 
+  @override
+  void dispose() {
+    // 离开文件夹就清掉「打开」留下的临时文件
+    clearOpenCache();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     setState(() => _loading = true);
     final location = await DownloadHelper.getLocation();
     if (location == DownloadHelper.downloadsLocation) {
+      // 读 MediaStore 内容需要媒体权限，第一次进来先请求
+      await SystemService.requestMediaImages();
       final list = await SystemService.listDownloads();
       if (!mounted) return;
       setState(() {
@@ -241,10 +251,20 @@ class _AppFolderPageState extends State<AppFolderPage> {
                 }
               })()
             : '文件夹';
+        final showThumb = item is File && isPreviewableImageName(name);
         return RemoteEntryTile(
           name: name,
           isDirectory: isDir,
           subtitle: size,
+          thumbnail: showThumb
+              ? Image.file(
+                  item,
+                  fit: BoxFit.cover,
+                  cacheWidth: 120,
+                  gaplessPlayback: true,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                )
+              : null,
           onTap: () => _open(item),
           onLongPress: () => _showFileActions(item),
         );
@@ -297,22 +317,43 @@ class _AppFolderPageState extends State<AppFolderPage> {
     if (item is! File) return;
     final name = _baseName(item);
     if (isPreviewableImageName(name)) {
-      final bytes = await item.readAsBytes();
-      if (!mounted) return;
+      // 收集同目录所有图片，预览时可左右翻页
+      final images = <File>[];
+      var startIndex = 0;
+      for (final e in _files) {
+        if (e is File && isPreviewableImageName(_baseName(e))) {
+          if (e.path == item.path) startIndex = images.length;
+          images.add(e);
+        }
+      }
+      final items = <ImagePreviewItem>[];
+      for (final f in images) {
+        try {
+          items.add(
+            ImagePreviewItem(
+              name: _baseName(f),
+              bytes: await f.readAsBytes(),
+              onDelete: () async {
+                try {
+                  await f.delete();
+                  await _load();
+                  return true;
+                } catch (_) {
+                  return false;
+                }
+              },
+            ),
+          );
+        } catch (_) {
+          // 读不出来的跳过
+        }
+      }
+      if (items.isEmpty || !mounted) return;
       await Navigator.of(context).push(
         InstantPageRoute<void>(
           builder: (_) => ImagePreviewPage(
-            bytes: bytes,
-            name: name,
-            onDelete: () async {
-              try {
-                await item.delete();
-                await _load();
-                return true;
-              } catch (_) {
-                return false;
-              }
-            },
+            items: items,
+            initialIndex: startIndex.clamp(0, items.length - 1),
           ),
         ),
       );
@@ -386,7 +427,7 @@ class _AppFolderPageState extends State<AppFolderPage> {
       if (isPreviewableImageName(entry.name)) {
         await Navigator.of(context).push(
           InstantPageRoute<void>(
-            builder: (_) => ImagePreviewPage(
+            builder: (_) => ImagePreviewPage.single(
               bytes: bytes,
               name: entry.name,
               onDelete: () async => SystemService.deleteDownload(entry.uri),
@@ -492,6 +533,13 @@ class _SubFolderPageState extends State<_SubFolderPage> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    // 离开文件夹就清掉「打开」留下的临时文件
+    clearOpenCache();
+    super.dispose();
   }
 
   void _load() {

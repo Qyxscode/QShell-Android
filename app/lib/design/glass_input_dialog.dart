@@ -138,24 +138,17 @@ class _GlassInputViewState extends State<_GlassInputView>
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) widget.onClose(null);
       },
-      child: Stack(
-        children: [
-          AnimatedBuilder(
+      // 键盘弹出时整体上移，否则高内容会被顶出屏幕
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: Center(
+          child: AnimatedBuilder(
             animation: curve,
-            builder: (context, _) => GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => widget.onClose(null),
-              child: ColoredBox(
-                color: Colors.black.withValues(alpha: 0.30 * curve.value),
-              ),
-            ),
-          ),
-          Center(
-            child: AnimatedBuilder(
-              animation: curve,
-              builder: (context, child) => Transform.scale(
-                scale: 0.96 + 0.04 * curve.value,
-                child: child,
+            builder: (context, child) => Transform.scale(
+              scale: 0.96 + 0.04 * curve.value,
+              child: child,
               ),
               child: GestureDetector(
                 onTap: () {},
@@ -263,8 +256,7 @@ class _GlassInputViewState extends State<_GlassInputView>
               ),
             ),
           ),
-        ],
-      ),
+        ),
     );
   }
 }

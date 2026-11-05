@@ -47,6 +47,19 @@ class SystemChannel(private val activity: MainActivity) {
             "trafficInfo" -> result.success(trafficInfo())
             // 把文件保存到系统「下载」目录（Android 10+ 用 MediaStore，不需要存储权限）
             // 列出 Download/QShell 下的文件（分区存储下只能用 MediaStore 查询）
+            "requestMediaImages" -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    val perm = Manifest.permission.READ_MEDIA_IMAGES
+                    if (hasPermission(perm)) {
+                        result.success(true)
+                    } else {
+                        activity.requestPermissions(arrayOf(perm), 0x4D49)
+                        result.success(false)
+                    }
+                } else {
+                    result.success(true)
+                }
+            }
             "listDownloads" -> {
                 Thread {
                     val list = runCatching { listDownloads() }.getOrElse { emptyList() }
