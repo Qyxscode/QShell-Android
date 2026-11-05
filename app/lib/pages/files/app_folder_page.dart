@@ -16,6 +16,7 @@ import '../../services/system_service.dart';
 import 'file_actions.dart';
 import 'file_icon.dart';
 import 'image_preview_page.dart';
+import 'video_preview_page.dart';
 
 /// 下载文件夹的管理页。
 ///
@@ -133,7 +134,8 @@ class _AppFolderPageState extends State<AppFolderPage> {
     final strings = AppStrings.of(context);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      // 玻璃主题靠壁纸透出做材质，MD3 没有壁纸层，透明只会让页面「消失」
+      backgroundColor: tokens.glass ? Colors.transparent : tokens.background,
       appBar: AppBar(
         title: Text(_isDownloads ? '下载文件夹' : '应用文件夹'),
         actions: [
@@ -417,14 +419,15 @@ class _AppFolderPageState extends State<AppFolderPage> {
 
   Future<void> _openDownload(DownloadEntry entry) async {
     try {
-      final bytes = await SystemService.readDownload(entry.uri);
-      if (bytes == null) {
-        if (!mounted) return;
-        showGlassToast(context, '读取失败', tone: GlassToastTone.error);
-        return;
-      }
-      if (!mounted) return;
+      // 图片：小文件，直接读进内存做预览（可左右翻页 / 删除）
       if (isPreviewableImageName(entry.name)) {
+        final bytes = await SystemService.readDownload(entry.uri);
+        if (bytes == null) {
+          if (!mounted) return;
+          showGlassToast(context, '读取失败', tone: GlassToastTone.error);
+          return;
+        }
+        if (!mounted) return;
         await Navigator.of(context).push(
           InstantPageRoute<void>(
             builder: (_) => ImagePreviewPage.single(
@@ -437,10 +440,29 @@ class _AppFolderPageState extends State<AppFolderPage> {
         await _load();
         return;
       }
-      // 其他类型落到缓存再交给系统应用
+
+      // 视频/音频/其它：MediaStore 里的内容不能按路径打开，先流式复制到缓存。
+      // 不能走 readDownload —— 几百 MB 的视频会直接撑爆内存。
       final dir = await getTemporaryDirectory();
       final target = File('${dir.path}/${entry.name}');
-      await target.writeAsBytes(bytes);
+      final copied = await SystemService.copyDownload(entry.uri, target.path);
+      if (!copied) {
+        if (!mounted) return;
+        showGlassToast(context, '读取失败', tone: GlassToastTone.error);
+        return;
+      }
+      if (!mounted) return;
+      if (isPlayableMedia(entry.name)) {
+        await Navigator.of(context).push(
+          InstantPageRoute<void>(
+            builder: (_) => VideoPreviewPage(
+              name: entry.name,
+              filePath: target.path,
+            ),
+          ),
+        );
+        return;
+      }
       await OpenFilex.open(target.path);
     } catch (e) {
       if (!mounted) return;
@@ -562,7 +584,7 @@ class _SubFolderPageState extends State<_SubFolderPage> {
     final text = Theme.of(context).textTheme;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: tokens.glass ? Colors.transparent : tokens.background,
       appBar: AppBar(title: Text(_baseName(widget.dir))),
       body: _items.isEmpty
           ? Center(

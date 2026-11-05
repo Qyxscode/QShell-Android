@@ -24,6 +24,17 @@ class TransferCancelled implements Exception {
   const TransferCancelled();
 }
 
+/// 可以直接交给播放器边下边播的 HTTP 资源（直链 + 请求头）。
+///
+/// 只有 HTTP 系协议（WebDAV）能给出这种东西；FTP / SMB 没有 URL 概念，
+/// 只能先整份下载再播放。
+class StreamSource {
+  const StreamSource({required this.url, this.headers = const <String, String>{}});
+
+  final String url;
+  final Map<String, String> headers;
+}
+
 /// 统一的远程文件系统接口。
 abstract class RemoteFs {
   Future<List<RemoteEntry>> list(String path);
@@ -49,6 +60,11 @@ abstract class RemoteFs {
   Future<void> rename(RemoteEntry entry, String newName);
 
   Future<void> mkdir(String path);
+
+  /// 能流式播放时返回直链，否则返回 null（调用方回退到「下载后播放」）。
+  ///
+  /// 默认 null：FTP / SMB 等没有 HTTP 直链，只有 WebDAV 覆盖。
+  StreamSource? streamSource(String path) => null;
 
   Future<void> dispose();
 }

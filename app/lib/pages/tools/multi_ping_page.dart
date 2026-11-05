@@ -4,6 +4,7 @@ import '../../design/glass_card.dart';
 import 'package:flutter/material.dart';
 
 import '../../design/tokens.dart';
+import '../../widgets/input_style.dart';
 import '../../i18n/app_strings.dart';
 import '../../widgets/tool_layout.dart';
 import '../../services/tools/ping_service.dart';
@@ -178,10 +179,7 @@ class _MultiPingPageState extends State<MultiPingPage> {
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                   filled: true,
                   fillColor: tokens.surfaceCardAlt,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: BorderSide.none,
-                  ),
+                  border: inputBorder(tokens, radius: 10),
                 ),
               ),
             ],

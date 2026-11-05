@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../state/theme_scope.dart';
-import 'glass_design_system.dart';
-import 'tokens.dart';
+import 'glass/glass_design_system.dart';
+import 'core/tokens.dart';
 
 /// 给「push 出来的页面」提供一层不透明背景。
 ///

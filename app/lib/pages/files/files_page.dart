@@ -7,6 +7,7 @@ import '../../design/instant_route.dart';
 import '../../design/glass_card.dart';
 
 import '../../design/tokens.dart';
+import '../../widgets/input_style.dart';
 import '../../i18n/app_strings.dart';
 import '../../services/files/remote_fs.dart';
 import '../../services/qshell_config.dart';
@@ -589,10 +590,7 @@ class _RemoteServerSheetState extends State<_RemoteServerSheet> {
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 filled: true,
                 fillColor: tokens.surfaceCardAlt,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
+                border: inputBorder(tokens),
               ),
             ),
           ),

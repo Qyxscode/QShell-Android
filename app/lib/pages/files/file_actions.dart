@@ -13,16 +13,25 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../design/tokens.dart';
 import '../../i18n/app_strings.dart';
+import 'media_types.dart';
+
+// 类型判断函数原先定义在本文件，现已抽到 media_types.dart；
+// 这里 re-export，调用方（remote_browser_page / sftp_browser_page）无需改动。
+export 'media_types.dart';
 
 /// 文件操作菜单的选项。
 enum FileAction { open, download, rename, delete, properties }
 
 /// 单击文件弹出的上拉菜单。
+///
+/// [streamable] 表示当前协议能把直链交给播放器（WebDAV 等 HTTP 协议），
+/// 只影响视频那一项的副标题——避免 FTP/SMB 上写「边下边播」实际却要整份下载。
 Future<FileAction?> showFileActionSheet(
   BuildContext context, {
   required String name,
   required bool isDirectory,
   required String subtitle,
+  bool streamable = false,
 }) {
   final tokens = AppTokens.of(context);
   final text = Theme.of(context).textTheme;
@@ -56,7 +65,7 @@ Future<FileAction?> showFileActionSheet(
           if (!isDirectory) ...[
             ListTile(
               leading: Icon(
-                isPlayableVideo(name)
+                isPlayableMedia(name)
                     ? Icons.play_circle_outline_rounded
                     : isPreviewableImage(name)
                         ? Icons.image_outlined
@@ -64,8 +73,8 @@ Future<FileAction?> showFileActionSheet(
                 color: tokens.accent,
               ),
               title: Text(openActionLabel(name)),
-              subtitle: isPlayableVideo(name)
-                  ? const Text('在线播放，边下边播')
+              subtitle: isPlayableMedia(name)
+                  ? Text(streamable ? '在线播放，边下边播' : '播放前需要先下载到本地')
                   : isPreviewableImage(name)
                       ? const Text('应用内查看')
                       : null,
@@ -100,40 +109,6 @@ Future<FileAction?> showFileActionSheet(
       ),
     ),
   );
-}
-
-/// 按文件类型给「打开」换成更明确的文案。
-String openActionLabel(String name) {
-  final dot = name.lastIndexOf('.');
-  final ext = dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
-  if (const {'mp4', 'mkv', 'avi', 'mov', 'flv', 'webm', 'm4v', '3gp'}
-      .contains(ext)) {
-    return '播放';
-  }
-  if (const {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif'}
-      .contains(ext)) {
-    return '预览';
-  }
-  if (ext == 'apk' || ext == 'aab') return '安装';
-  return '打开';
-}
-
-/// 视频扩展名：应用内播放。
-bool isPlayableVideo(String name) {
-  final dot = name.lastIndexOf('.');
-  if (dot < 0) return false;
-  const exts = {'mp4', 'mkv', 'avi', 'mov', 'flv', 'webm', 'm4v', '3gp'};
-  return exts.contains(name.substring(dot + 1).toLowerCase());
-}
-
-/// 图片扩展名：这些类型走应用内预览，不交给系统相册。
-bool isPreviewableImage(String name) {
-  final dot = name.lastIndexOf('.');
-  if (dot < 0) return false;
-  const exts = {
-    'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif',
-  };
-  return exts.contains(name.substring(dot + 1).toLowerCase());
 }
 
 /// 把远程文件下载到缓存目录，然后交给系统应用打开。

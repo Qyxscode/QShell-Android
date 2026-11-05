@@ -66,6 +66,43 @@ class SystemChannel(private val activity: MainActivity) {
                     activity.runOnUiThread { result.success(list) }
                 }.start()
             }
+            // 读取 Download/QShell 下某个文件的内容（只用于图片等小文件）
+            "readDownload" -> {
+                val uriText = call.argument<String>("uri") ?: ""
+                Thread {
+                    val bytes = runCatching {
+                        if (uriText.isEmpty()) return@runCatching null
+                        activity.contentResolver
+                            .openInputStream(android.net.Uri.parse(uriText))
+                            ?.use { readLimited(it, 48 * 1024 * 1024) }
+                    }.getOrNull()
+                    activity.runOnUiThread { result.success(bytes) }
+                }.start()
+            }
+            // 把 Download/QShell 下的文件流式复制到应用缓存（视频等大文件，不进内存）
+            "copyDownload" -> {
+                val uriText = call.argument<String>("uri") ?: ""
+                val destPath = call.argument<String>("path") ?: ""
+                Thread {
+                    val ok = runCatching {
+                        if (uriText.isEmpty() || destPath.isEmpty()) {
+                            return@runCatching false
+                        }
+                        val dest = java.io.File(destPath)
+                        dest.parentFile?.mkdirs()
+                        val input = activity.contentResolver
+                            .openInputStream(android.net.Uri.parse(uriText))
+                            ?: return@runCatching false
+                        input.use { source ->
+                            dest.outputStream().use { sink ->
+                                source.copyTo(sink, 64 * 1024)
+                            }
+                        }
+                        true
+                    }.getOrDefault(false)
+                    activity.runOnUiThread { result.success(ok) }
+                }.start()
+            }
             // 删除 Download/QShell 下的某个文件
             "deleteDownload" -> {
                 val uriText = call.argument<String>("uri") ?: ""
@@ -137,14 +174,32 @@ class SystemChannel(private val activity: MainActivity) {
                 result.success(null)
             }
             // 打开系统的电池优化设置（部分 ROM 需要手动允许后台）
+            //
+            // 优先弹「允许 QShell 在后台运行？」的授权对话框：
+            // 之前直接跳 ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS（白名单列表），
+            // 很多 ROM 的这个列表里根本列不出本应用，用户点完回来状态永远不变，
+            // 看起来就像「给不给权限都提示限制后台」。
             "openBatterySettings" -> {
-                runCatching {
+                val packageUri = android.net.Uri.parse("package:${activity.packageName}")
+                val requested = runCatching {
                     activity.startActivity(
                         android.content.Intent(
                             android.provider.Settings
-                                .ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS,
+                                .ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                            packageUri,
                         ),
                     )
+                    true
+                }.getOrDefault(false)
+                if (!requested) {
+                    runCatching {
+                        activity.startActivity(
+                            android.content.Intent(
+                                android.provider.Settings
+                                    .ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS,
+                            ),
+                        )
+                    }
                 }
                 result.success(null)
             }
@@ -155,7 +210,7 @@ class SystemChannel(private val activity: MainActivity) {
                 val wifiManager = activity.applicationContext
                     .getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
                 val map = mutableMapOf<String, Any?>(
-                    "running" to TerminalKeepAliveService.isRunning,
+                    "running" to (TerminalKeepAliveService.isRunning || isKeepAliveServiceRunning()),
                     "wakeLock" to TerminalKeepAliveService.holdingWakeLock,
                     "batteryOptimized" to !powerManager.isIgnoringBatteryOptimizations(
                         activity.packageName,
@@ -771,9 +826,37 @@ class SystemChannel(private val activity: MainActivity) {
         "tx" to TrafficStats.getTotalTxBytes(),
     )
 
+    /// 保活服务是否在系统里真实运行。
+    ///
+    /// 只看静态 `isRunning` 不够稳：进程被重建后静态变量会归零，
+    /// 而服务可能还活着（START_STICKY）。这里再问一次 ActivityManager，
+    /// Android 8+ 对「查询自己的服务」仍然是允许的。
+    private fun isKeepAliveServiceRunning(): Boolean = runCatching {
+        val manager = activity.getSystemService(Context.ACTIVITY_SERVICE)
+                as android.app.ActivityManager
+        @Suppress("DEPRECATION")
+        manager.getRunningServices(Int.MAX_VALUE).any {
+            it.service.className == TerminalKeepAliveService::class.java.name
+        }
+    }.getOrDefault(false)
+
     /// 写入系统下载目录，返回 content:// URI（API 29+）。
     /// 低版本没有 MediaStore.Downloads，返回 null，调用方回退到应用目录。
     /// 查询 Download/QShell 里的文件。分区存储下无法用 File API 直接读这个目录。
+    private fun readLimited(input: java.io.InputStream, limit: Int): ByteArray? {
+        val out = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(64 * 1024)
+        var total = 0
+        while (true) {
+            val read = input.read(buffer)
+            if (read < 0) break
+            total += read
+            if (total > limit) return null
+            out.write(buffer, 0, read)
+        }
+        return out.toByteArray()
+    }
+
     private fun listDownloads(): List<Map<String, Any>> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return emptyList()
         val resolver = activity.contentResolver
@@ -823,7 +906,7 @@ class SystemChannel(private val activity: MainActivity) {
             put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name)
             put(
                 android.provider.MediaStore.Downloads.MIME_TYPE,
-                "application/octet-stream",
+                mimeFor(name),
             )
             put(
                 android.provider.MediaStore.Downloads.RELATIVE_PATH,
@@ -836,6 +919,41 @@ class SystemChannel(private val activity: MainActivity) {
         ) ?: return null
         resolver.openOutputStream(uri)?.use { it.write(bytes) } ?: return null
         return uri.toString()
+    }
+
+    /// 按扩展名给 MediaStore 一个像样的 MIME，
+    /// 否则全写成 octet-stream，系统相册/播放器不认这些文件。
+    private fun mimeFor(name: String): String {
+        return when (name.substringAfterLast('.', "").lowercase()) {
+            "jpg", "jpeg" -> "image/jpeg"
+            "png" -> "image/png"
+            "gif" -> "image/gif"
+            "webp" -> "image/webp"
+            "bmp" -> "image/bmp"
+            "heic", "heif" -> "image/heic"
+            "mp4", "m4v" -> "video/mp4"
+            "mkv" -> "video/x-matroska"
+            "mov" -> "video/quicktime"
+            "avi" -> "video/x-msvideo"
+            "flv" -> "video/x-flv"
+            "webm" -> "video/webm"
+            "3gp" -> "video/3gpp"
+            "ts", "m2ts" -> "video/mp2t"
+            "wmv" -> "video/x-ms-wmv"
+            "mp3" -> "audio/mpeg"
+            "m4a", "aac" -> "audio/mp4"
+            "flac" -> "audio/flac"
+            "wav" -> "audio/x-wav"
+            "ogg", "oga" -> "audio/ogg"
+            "opus" -> "audio/opus"
+            "wma" -> "audio/x-ms-wma"
+            "amr" -> "audio/amr"
+            "apk" -> "application/vnd.android.package-archive"
+            "zip" -> "application/zip"
+            "pdf" -> "application/pdf"
+            "txt" -> "text/plain"
+            else -> "application/octet-stream"
+        }
     }
 
     private fun hasUsageAccess(): Boolean {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../design/glass_card.dart';
 
 import '../design/tokens.dart';
+import 'input_style.dart';
 
 /// 工具页统一布局组件。
 ///
@@ -91,18 +92,9 @@ class ToolField extends StatelessWidget {
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
               filled: true,
               fillColor: tokens.surfaceCardAlt,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide(color: tokens.accent, width: 1.2),
-              ),
+              border: inputBorder(tokens, radius: 10),
+              enabledBorder: inputBorder(tokens, radius: 10),
+              focusedBorder: focusedInputBorder(tokens, radius: 10),
             ),
           ),
         ),

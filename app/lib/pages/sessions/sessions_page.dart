@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 
 import '../../design/tokens.dart';
+import '../../widgets/input_style.dart';
 import '../../services/qshell_config.dart';
 import '../../widgets/settings_action.dart';
 import '../../i18n/app_strings.dart';
@@ -495,10 +496,7 @@ class _SearchField extends StatelessWidget {
         fillColor: tokens.glass
             ? Colors.white.withValues(alpha: 0.28)
             : tokens.surfaceCardAlt,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
-          borderSide: BorderSide.none,
-        ),
+        border: inputBorder(tokens, radius: 20),
       ),
     );
   }
@@ -786,10 +784,7 @@ class _HostEditSheetState extends State<_HostEditSheet> {
                 fillColor: tokens.glass
                     ? Colors.white.withValues(alpha: 0.28)
                     : tokens.surfaceCardAlt,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
+                border: inputBorder(tokens),
               ),
             ),
           ),
