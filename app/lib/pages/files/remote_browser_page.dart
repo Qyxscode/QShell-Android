@@ -7,6 +7,7 @@ import '../../design/glass_input_dialog.dart';
 import '../../design/glass_dialog.dart';
 import '../../design/glass_toast.dart';
 import '../../design/glass_card.dart';
+import '../../design/instant_route.dart';
 import 'package:flutter/material.dart';
 
 import '../../design/tokens.dart';
@@ -18,6 +19,7 @@ import '../../services/files/smb_fs.dart';
 import '../../services/files/webdav_fs.dart';
 import 'file_icon.dart';
 import 'file_actions.dart';
+import 'video_preview_page.dart';
 
 /// 通用远程文件浏览器：SFTP 之外的 FTP / WebDAV / SMB 共用。
 class RemoteBrowserPage extends StatefulWidget {
@@ -131,6 +133,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
       name: entry.name,
       isDirectory: entry.isDirectory,
       subtitle: entry.isDirectory ? AppStrings.of(context).browserFolder : _fmtSize(entry.size),
+      streamable: _fs?.streamSource(entry.path) != null,
     );
     if (action == null || !mounted) return;
     switch (action) {
@@ -150,6 +153,31 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   Future<void> _open(RemoteEntry entry) async {
     final fs = _fs;
     if (fs == null) return;
+
+    // 视频/音频优先在线播放：把直链和认证头交给播放器，边下边播。
+    // 只有 HTTP 系协议（WebDAV）拿得到直链；FTP/SMB 返回 null，走下面的下载分支。
+    if (isPlayableMedia(entry.name)) {
+      final source = fs.streamSource(entry.path);
+      if (source != null) {
+        await Navigator.of(context).push(
+          InstantPageRoute<void>(
+            builder: (_) => VideoPreviewPage(
+              name: entry.name,
+              networkUrl: source.url,
+              httpHeaders: source.headers,
+              // 播放页右上角的下载按钮，落盘位置跟随设置
+              downloader: (onProgress) async {
+                final tempPath = await DownloadHelper.tempPath(entry.name);
+                await fs.download(entry.path, tempPath, onProgress: onProgress);
+                return DownloadHelper.finalize(tempPath, entry.name);
+              },
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
     setState(() {
       _transferName = entry.name;
       _transferTotal = entry.size;

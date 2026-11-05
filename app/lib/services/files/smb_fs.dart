@@ -24,6 +24,10 @@ class SmbFs implements RemoteFs {
     return SmbFs(pool);
   }
 
+  /// SMB 没有 HTTP 直链，播放前必须整份下载。
+  @override
+  StreamSource? streamSource(String path) => null;
+
   @override
   Future<List<RemoteEntry>> list(String path) async {
     final items = await _pool.listDirectory(path);

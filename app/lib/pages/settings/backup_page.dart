@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../design/tokens.dart';
+import '../../widgets/input_style.dart';
 import '../../i18n/app_strings.dart';
 import '../../services/download_helper.dart';
 import '../../services/files/remote_fs.dart';
@@ -458,10 +459,7 @@ class _BackupPageState extends State<BackupPage> {
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               filled: true,
               fillColor: tokens.surfaceCardAlt,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
+              border: inputBorder(tokens),
             ),
           ),
         ),

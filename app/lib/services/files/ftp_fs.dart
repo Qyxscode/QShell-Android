@@ -24,6 +24,10 @@ class FtpFs implements RemoteFs {
     return FtpFs(ftp);
   }
 
+  /// FTP 没有 HTTP 直链，播放前必须整份下载。
+  @override
+  StreamSource? streamSource(String path) => null;
+
   @override
   Future<List<RemoteEntry>> list(String path) async {
     final target = path.isEmpty ? '/' : path;

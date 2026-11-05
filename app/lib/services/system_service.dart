@@ -657,7 +657,7 @@ class SystemService {
     }
   }
 
-  /// 读取 Download/QShell 下某个文件的内容。
+  /// 读取 Download/QShell 下某个文件的内容（只适合图片等小文件）。
   static Future<List<int>?> readDownload(String uri) async {
     try {
       return await _channel.invokeMethod<Uint8List>('readDownload', {
@@ -665,6 +665,22 @@ class SystemService {
       });
     } catch (_) {
       return null;
+    }
+  }
+
+  /// 把 Download/QShell 下的文件流式复制到 [destPath]（视频等大文件用）。
+  ///
+  /// MediaStore 里的文件不能用 File API 直接打开，播放器又只吃本地路径，
+  /// 所以先复制一份到缓存目录；成功后返回 true。
+  static Future<bool> copyDownload(String uri, String destPath) async {
+    try {
+      return await _channel.invokeMethod<bool>('copyDownload', {
+            'uri': uri,
+            'path': destPath,
+          }) ??
+          false;
+    } catch (_) {
+      return false;
     }
   }
 

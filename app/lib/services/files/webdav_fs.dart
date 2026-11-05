@@ -81,6 +81,14 @@ class WebdavFs implements RemoteFs {
   @override
   Future<void> mkdir(String path) => _client.mkdir(path);
 
+  /// WebDAV 自带 Range 支持，直接把直链 + Basic 认证头交给播放器，
+  /// 边下边播，不用先把整个文件拉到本地。
+  @override
+  StreamSource? streamSource(String path) => StreamSource(
+        url: _client.uriOf(path).toString(),
+        headers: _client.authHeaders,
+      );
+
   @override
   Future<void> dispose() async {}
 }

@@ -22,6 +22,7 @@ import '../../services/qshell_config.dart';
 import '../../services/update_service.dart';
 import '../../version.dart';
 import '../../services/system_service.dart';
+import '../../services/terminal_registry.dart';
 import '../../state/locale_scope.dart';
 import '../../state/theme_controller.dart';
 import 'backup_page.dart';
@@ -36,7 +37,8 @@ class SettingsPage extends StatefulWidget {
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsPageState extends State<SettingsPage>
+    with WidgetsBindingObserver {
   bool _usage = false;
   bool _phone = false;
   bool _wifi = false;
@@ -56,16 +58,35 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _keepAliveRunning = false;
   bool _keepAliveWakeLock = false;
   bool _keepAliveBatteryOptimized = false;
+  int _keepAliveTerminals = 0;
   String _keepAliveHint = '正在读取…';
 
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadUpdatePrefs();
     _loadKeepAlive();
     _loadPermissions();
     _loadDownloadLocation();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// 从系统设置（电池优化 / 权限页）回来时状态会变，回来就重新读一遍。
+  /// 之前只在 initState 读一次，用户允许了后台运行、回到 App 却还是旧状态，
+  /// 看起来就像「给不给权限都提示被限制」。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadKeepAlive();
+      _loadPermissions();
+    }
   }
 
   String _downloadLocation = DownloadHelper.appLocation;
@@ -122,25 +143,33 @@ class _SettingsPageState extends State<SettingsPage> {
     final wakeLock = status['wakeLock'] == true;
     final optimized = status['batteryOptimized'] == true;
     final sdk = (status['sdkInt'] as num?)?.toInt() ?? 0;
+    // 没有活跃终端时服务本来就不该跑，那不是故障
+    final terminals = TerminalRegistry.active.length;
     setState(() {
       _keepAliveRunning = running;
       _keepAliveWakeLock = wakeLock;
       _keepAliveBatteryOptimized = optimized;
-      if (running && wakeLock && !optimized) {
-        _keepAliveHint = '已启用前台服务 + 唤醒锁，息屏可保持连接';
-      } else if (!running) {
-        _keepAliveHint = '未运行：连上 SSH 终端后自动启用';
+      _keepAliveTerminals = terminals;
+      if (running) {
+        _keepAliveHint = wakeLock
+            ? '已启用：前台服务 + 唤醒锁，息屏仍保持连接'
+            : '已启用：前台服务在跑（唤醒锁未持有）';
+      } else if (terminals > 0) {
+        _keepAliveHint = '未生效：$terminals 个终端在连，但保活服务没起来，检查下面的后台限制';
       } else {
-        _keepAliveHint = '部分生效：建议允许后台运行，避免被系统回收';
+        // 关键：这是空闲状态，不是错误。以前写成「未运行」看着像坏了。
+        _keepAliveHint = '空闲：当前没有 SSH 会话，连上终端后自动启用';
       }
       if (sdk >= 34) {
-        _keepAliveHint = '（Android 14+ 使用 specialUse 前台服务）';
+        _keepAliveHint = '$_keepAliveHint（Android 14+ 使用 specialUse 前台服务）';
       }
     });
   }
 
   Future<void> _openBatterySettings() async {
     await SystemService.openBatteryOptimizationSettings();
+    // 弹窗是系统的，startActivity 立刻返回；用户点完回来由
+    // didChangeAppLifecycleState(resumed) 统一刷新。
   }
 
   Future<void> _loadPermissions() async {
@@ -1141,25 +1170,37 @@ class _SettingsPageState extends State<SettingsPage> {
                         icon: const Icon(Icons.refresh_rounded, size: 20),
                       ),
                     ),
-                    if (_keepAliveBatteryOptimized) ...[
+                    if (_keepAliveBatteryOptimized ||
+                        (_keepAliveTerminals > 0 && !_keepAliveRunning)) ...[
                       const Divider(height: 1),
                       ListTile(
                         leading: Icon(Icons.warning_amber_rounded,
                             color: tokens.warning, size: 20),
                         title: Text(
-                          '系统可能限制后台运行',
+                          _keepAliveBatteryOptimized
+                              ? '系统可能限制后台运行'
+                              : '保活服务未启动',
                           style: text.bodyMedium
                               ?.copyWith(color: tokens.textPrimary),
                         ),
                         subtitle: Text(
-                          '息屏时间长了 SSH 会被系统断开，建议允许后台运行',
+                          _keepAliveBatteryOptimized
+                              ? '息屏时间长了 SSH 会被系统断开，建议允许后台运行'
+                              : '有 $_keepAliveTerminals 个终端在连，但前台服务没起来；可点刷新或重连一次终端',
                           style: text.bodySmall
                               ?.copyWith(color: tokens.textSecondary),
                         ),
-                        trailing: TextButton(
-                          onPressed: _openBatterySettings,
-                          child: const Text('去设置'),
-                        ),
+                        trailing: _keepAliveBatteryOptimized
+                            ? TextButton(
+                                onPressed: _openBatterySettings,
+                                child: const Text('去设置'),
+                              )
+                            : IconButton(
+                                tooltip: '刷新',
+                                onPressed: _loadKeepAlive,
+                                icon: const Icon(Icons.refresh_rounded,
+                                    size: 20),
+                              ),
                       ),
                     ],
                   ],

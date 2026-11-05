@@ -1011,6 +1011,55 @@ lib/state/
 - [ ] 带 BackdropFilter 的子树没有 Opacity/Fade
 - [ ] 按第 12 节逐条自查
 
+### 13.5 主题分组与隔离（防止两种风格混用）
+
+**分组分两层，不要理解成"两套组件"。**
+
+| 层 | 做法 | 位置 |
+|---|---|---|
+| 主题层 | **物理分离**：两套 `DesignSystem` 各自产出 ThemeData + tokens，只共享 token 结构与 `tokensFromColorScheme` | `md3_design_system.dart` / `glass_design_system.dart` |
+| 组件层 | **单实现 + `tokens.glass` 分支** | 各组件文件内 |
+| 结构性参数 | **共用、不分支**：圆角、间距、字号、动效时长、布局 | 各组件 |
+
+组件层不做物理两套，原因：同一个 bug 要修两遍、布局逻辑重复、容易漂移。
+Material 本身也是"主题驱动单组件"，我们只是把主题换成自定义 token。
+
+**分支审计表**（新增组件时对照）
+
+| 组件 | GLASS 分支 | MD3 分支 |
+|---|---|---|
+| 背景 `GlassBackdrop` | 光斑 / 壁纸 | 纯色 `background` |
+| 卡片 `GlassCard` | 自绘半透明 + 渐变 + 厚度边 | 退化为标准 `Card`（outlined） |
+| 浮层 `GlassSurface`（toast/菜单/弹窗/确认框） | 模糊 + 半透明 + `GlassEdgePainter` | **纯色 + 阴影，无描边、无模糊** |
+| 开关 `GlassSwitch` | 半透明轨道 + 光晕 | 实心 accent 轨道 |
+| 滑块 `GlassSlider` | 白滑块 + 半透明轨道 | accent 滑块 |
+| 分段按钮 `segmentStyle` | 透光高光（白 22% / accent 26%） | `accentSoft` 实心 |
+| 底栏 `GlassBottomNavBar` | 模糊胶囊 + 厚度边 | 普通卡片底 + 描边 + 阴影 |
+| 状态标签 | 14% 底 + 25% 同色描边 | 实心 accent 底 + `onAccentSoft` 文字 |
+| 内嵌块 | `surfaceCardAlt` 22% | `surfaceCardAlt` 实色 |
+| 连接按钮 | 渐变 + 呼吸光晕 + 外环 + 连上高光 | 实心强调色，无光晕/外环/高光 |
+| `iconButtonTheme` | 40 圆形玻璃底 | Material 默认 |
+| `tooltipTheme` | 半透明 + 描边 | 实色 |
+
+**新增组件时的硬规则**
+
+1. 任何"质感 / 光影 / 透明 / 模糊"差异 → 必须 `tokens.glass` 分支，
+   并在分支处写 `// GLASS:` / `// MD3:` 注释。
+2. 结构性参数（间距、圆角、字号、动画时长）**不要分支**——否则会变成两套会漂移的实现。
+3. 页面代码禁止直接判断主题写颜色；要么用 `tokens`，要么封装进组件。
+4. 带 `BackdropFilter`、`GlassEdgePainter`、渐变的代码必须被 `tokens.glass` 守卫，
+   不能泄漏到 MD3。
+5. 新增组件后**切到 MD3 走查**：浮层、按钮、开关、标签、内嵌块、底栏六类。
+
+**MD3 走查清单（切换主题后重点看）**
+
+- [ ] 弹窗 / 菜单 / toast：无描边、无模糊、纯色 + 阴影
+- [ ] 底部导航：普通卡片底，不是模糊胶囊
+- [ ] 卡片：outlined（1px 描边），无渐变厚度边
+- [ ] 开关 / 滑块：实心强调色，无光晕
+- [ ] 标签：实色底，不是 14% 淡底 + 同色描边
+- [ ] 连接按钮：实心圆，无外环、无光晕、无高光扫过
+
 ---
 
 ## 14. 调参速查
