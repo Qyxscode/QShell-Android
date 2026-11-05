@@ -1,4 +1,5 @@
 
+import '../design/glass_toast.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -153,14 +154,7 @@ class _AppShellState extends State<AppShell> {
     }
     _lastBackAt = now;
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('再按一次返回退出'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+    showGlassToast(context, '再按一次返回退出');
   }
 }
 

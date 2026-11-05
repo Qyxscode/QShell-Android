@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../design/glass_sheet.dart';
+import '../../design/glass_toast.dart';
 import '../../design/instant_route.dart';
 import '../../design/glass_card.dart';
 import 'dart:convert';
@@ -167,59 +169,59 @@ class _MonitorPageState extends State<MonitorPage> {
       }
     }
     if (all.isEmpty) {
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(AppStrings.of(context).filesNoConnections)));
+      showGlassToast(context, AppStrings.of(context).filesNoConnections);
       return;
     }
     final selected = Set<String>.from(_selected);
-    final result = await showDialog<Set<String>>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(AppStrings.of(context).settingsSelectNodes),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 360,
-            child: ListView(
+    final result = await showGlassSheet<Set<String>>(
+      context,
+      title: AppStrings.of(context).settingsSelectNodes,
+      builder: (context, close) => StatefulBuilder(
+        builder: (context, setDialogState) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final (id, host) in all)
+              CheckboxListTile(
+                dense: true,
+                value: selected.contains(id),
+                title: Text(host.name),
+                subtitle: Text('${host.host}:${host.port}'),
+                onChanged: (value) => setDialogState(() {
+                  if (value == true) {
+                    selected.add(id);
+                  } else {
+                    selected.remove(id);
+                  }
+                }),
+              ),
+            const SizedBox(height: 12),
+            Row(
               children: [
-                for (final (id, host) in all)
-                  CheckboxListTile(
-                    dense: true,
-                    value: selected.contains(id),
-                    title: Text(host.name),
-                    subtitle: Text('${host.host}:${host.port}'),
-                    onChanged: (value) => setDialogState(() {
-                      if (value == true) {
-                        selected.add(id);
-                      } else {
-                        selected.remove(id);
-                      }
-                    }),
-                  ),
+                TextButton(
+                  onPressed: () => setDialogState(() {
+                    if (selected.length == all.length) {
+                      selected.clear();
+                    } else {
+                      selected
+                        ..clear()
+                        ..addAll(all.map((item) => item.$1));
+                    }
+                  }),
+                  child: Text(selected.length == all.length
+                      ? AppStrings.of(context).settingsSelectNone
+                      : AppStrings.of(context).settingsSelectAll),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => close(null),
+                  child: Text(AppStrings.of(context).commonCancel),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () => close(selected),
+                  child: Text(AppStrings.of(context).commonConfirmBtn),
+                ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => setDialogState(() {
-                if (selected.length == all.length) {
-                  selected.clear();
-                } else {
-                  selected
-                    ..clear()
-                    ..addAll(all.map((item) => item.$1));
-                }
-              }),
-              child: Text(selected.length == all.length ? AppStrings.of(context).settingsSelectNone : AppStrings.of(context).settingsSelectAll),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(AppStrings.of(context).commonCancel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, selected),
-              child: Text(AppStrings.of(context).commonConfirmBtn),
             ),
           ],
         ),
@@ -301,9 +303,14 @@ class _MonitorPageState extends State<MonitorPage> {
 
 
   Future<void> _editNode(_NodeRuntime runtime) async {
-    final updated = await showDialog<MonitorNode>(
-      context: context,
-      builder: (_) => _NodeDialog(initial: runtime.node),
+    final updated = await showGlassSheet<MonitorNode>(
+      context,
+      title: AppStrings.of(context).settingsEditNode,
+      builder: (context, close) => _NodeDialog(
+        initial: runtime.node,
+        onCancel: () => close(null),
+        onDone: close,
+      ),
     );
     if (updated == null || !mounted) return;
     final configHost = runtime.configHost;
@@ -558,9 +565,15 @@ class _MonitorPageState extends State<MonitorPage> {
 }
 
 class _NodeDialog extends StatefulWidget {
-  const _NodeDialog({this.initial});
+  const _NodeDialog({
+    this.initial,
+    required this.onCancel,
+    required this.onDone,
+  });
 
   final MonitorNode? initial;
+  final VoidCallback onCancel;
+  final void Function(MonitorNode node) onDone;
 
   @override
   State<_NodeDialog> createState() => _NodeDialogState();
@@ -596,8 +609,7 @@ class _NodeDialogState extends State<_NodeDialog> {
       return;
     }
     final port = int.tryParse(_portCtrl.text.trim()) ?? 443;
-    Navigator.pop(
-      context,
+    widget.onDone(
       MonitorNode(
         id: widget.initial?.id ??
             DateTime.now().microsecondsSinceEpoch.toString(),
@@ -612,56 +624,70 @@ class _NodeDialogState extends State<_NodeDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.initial == null ? AppStrings.of(context).settingsAddNode : AppStrings.of(context).settingsEditNode),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    final strings = AppStrings.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _nameCtrl,
+          decoration: InputDecoration(
+            labelText: strings.commonName,
+            isDense: true,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _hostCtrl,
+          autocorrect: false,
+          enableSuggestions: false,
+          decoration: InputDecoration(
+            labelText: strings.commonHost,
+            isDense: true,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _portCtrl,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            labelText: strings.commonPort,
+            isDense: true,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(_error!,
+                style: const TextStyle(fontSize: 12, color: Colors.red)),
+          ),
+        const SizedBox(height: 16),
+        Row(
           children: [
-            TextField(
-              controller: _nameCtrl,
-              decoration: InputDecoration(
-                labelText: AppStrings.of(context).commonName,
-                isDense: true,
-                border: OutlineInputBorder(),
+            Expanded(
+              child: OutlinedButton(
+                onPressed: widget.onCancel,
+                child: Text(strings.commonCancel),
               ),
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _hostCtrl,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: InputDecoration(
-                labelText: AppStrings.of(context).commonHost,
-                isDense: true,
-                border: OutlineInputBorder(),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton(
+                onPressed: _submit,
+                child: const Text('保存'),
               ),
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _portCtrl,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: AppStrings.of(context).commonPort,
-                isDense: true,
-                border: OutlineInputBorder(),
-              ),
-            ),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(_error!,
-                    style: const TextStyle(fontSize: 12, color: Colors.red)),
-              ),
           ],
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(AppStrings.of(context).commonCancel),
-        ),
-        FilledButton(onPressed: _submit, child: const Text('保存')),
       ],
     );
   }

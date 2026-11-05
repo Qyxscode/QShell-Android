@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import '../../design/glass_dialog.dart';
+import '../../design/glass_input_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
@@ -124,30 +126,22 @@ Future<void> showFileProperties(
           ],
         ),
       );
-  return showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(AppStrings.of(context).filesProperties),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            row(AppStrings.of(context).commonName, name),
-            row(AppStrings.of(context).filesType, isDirectory ? AppStrings.of(context).filesFolder : AppStrings.of(context).filesFile),
-            if (sizeText != null) row(AppStrings.of(context).filesSize, sizeText),
-            if (modifiedText != null && modifiedText.isNotEmpty)
-              row(AppStrings.of(context).filesModified, modifiedText),
-            row(AppStrings.of(context).filesPath, path),
-            if (extra != null && extra.isNotEmpty) row(AppStrings.of(context).filesExtra, extra),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(AppStrings.of(context).filesClose),
-        ),
+  return showGlassInfo(
+    context,
+    title: AppStrings.of(context).filesProperties,
+    closeText: AppStrings.of(context).filesClose,
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        row(AppStrings.of(context).commonName, name),
+        row(AppStrings.of(context).filesType, isDirectory ? AppStrings.of(context).filesFolder : AppStrings.of(context).filesFile),
+        if (sizeText != null) row(AppStrings.of(context).filesSize, sizeText),
+        if (modifiedText != null && modifiedText.isNotEmpty)
+          row(AppStrings.of(context).filesModified, modifiedText),
+        row(AppStrings.of(context).filesPath, path),
+        if (extra != null && extra.isNotEmpty)
+          row(AppStrings.of(context).filesExtra, extra),
       ],
     ),
   );
@@ -155,27 +149,13 @@ Future<void> showFileProperties(
 
 /// 重命名输入框，返回新名字（null 表示取消）。
 Future<String?> askNewName(BuildContext context, String current) async {
-  final controller = TextEditingController(text: current);
-  final result = await showDialog<String>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(AppStrings.of(context).filesRename),
-      content: TextField(
-        controller: controller,
-        autofocus: true,
-        decoration: InputDecoration(labelText: AppStrings.of(context).filesNewName),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(AppStrings.of(context).commonCancel),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, controller.text.trim()),
-          child: Text(AppStrings.of(context).commonConfirmBtn),
-        ),
-      ],
-    ),
+  final result = await showGlassInput(
+    context,
+    title: AppStrings.of(context).filesRename,
+    label: AppStrings.of(context).filesNewName,
+    initial: current,
+    confirmText: AppStrings.of(context).commonConfirmBtn,
+    cancelText: AppStrings.of(context).commonCancel,
   );
   if (result == null || result.isEmpty || result == current) return null;
   return result;

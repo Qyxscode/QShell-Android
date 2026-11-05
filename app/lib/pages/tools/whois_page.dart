@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../design/glass_toast.dart';
 import 'package:flutter/services.dart';
 
 import '../../design/tokens.dart';
@@ -86,8 +87,10 @@ class _WhoisPageState extends State<WhoisPage> {
               onPressed: () async {
                 await Clipboard.setData(ClipboardData(text: result.text));
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(AppStrings.of(context).commonCopied)),
+                showGlassToast(
+                  context,
+                  AppStrings.of(context).commonCopied,
+                  tone: GlassToastTone.success,
                 );
               },
               icon: const Icon(Icons.copy_rounded),

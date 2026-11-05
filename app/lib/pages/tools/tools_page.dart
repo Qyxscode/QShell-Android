@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../design/glass_toast.dart';
 import '../../design/instant_route.dart';
 import '../../design/glass_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -348,8 +349,11 @@ class _ToolRow extends StatelessWidget {
         if (builder != null) {
           Navigator.of(context).push(InstantPageRoute<void>(builder: builder));
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(AppStrings.of(context).toolTodoTemplate.replaceAll('{name}', item.title))),
+          showGlassToast(
+            context,
+            AppStrings.of(context)
+                .toolTodoTemplate
+                .replaceAll('{name}', item.title),
           );
         }
       },

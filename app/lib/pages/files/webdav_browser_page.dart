@@ -1,4 +1,7 @@
 import 'package:file_picker/file_picker.dart';
+import '../../design/glass_input_dialog.dart';
+import '../../design/glass_dialog.dart';
+import '../../design/glass_toast.dart';
 import '../../design/glass_card.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -271,33 +274,19 @@ class _WebdavBrowserPageState extends State<WebdavBrowserPage> {
     }
     _lastBackAt = now;
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('再按一次返回退出'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+    showGlassToast(context, '再按一次返回退出');
   }
 
   Future<void> _delete(WebdavEntry entry) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(AppStrings.of(context).commonDelete),
-        content: Text(AppStrings.of(context).browserDeleteConfirmTemplate.replaceAll('{name}', entry.name)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(AppStrings.of(context).browserCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(AppStrings.of(context).browserDelete),
-          ),
-        ],
-      ),
+    final ok = await showGlassConfirm(
+      context,
+      title: AppStrings.of(context).commonDelete,
+      message: AppStrings.of(context)
+          .browserDeleteConfirmTemplate
+          .replaceAll('{name}', entry.name),
+      confirmText: AppStrings.of(context).browserDelete,
+      cancelText: AppStrings.of(context).browserCancel,
+      danger: true,
     );
     if (ok != true) return;
     try {
@@ -312,27 +301,12 @@ class _WebdavBrowserPageState extends State<WebdavBrowserPage> {
   }
 
   Future<void> _mkdir() async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(AppStrings.of(context).browserNewFolder),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(hintText: AppStrings.of(context).browserFolderName),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(AppStrings.of(context).browserCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: Text(AppStrings.of(context).browserCreate),
-          ),
-        ],
-      ),
+    final name = await showGlassInput(
+      context,
+      title: AppStrings.of(context).browserNewFolder,
+      hint: AppStrings.of(context).browserFolderName,
+      confirmText: AppStrings.of(context).browserCreate,
+      cancelText: AppStrings.of(context).browserCancel,
     );
     if (name == null || name.isEmpty) return;
     try {
@@ -347,9 +321,7 @@ class _WebdavBrowserPageState extends State<WebdavBrowserPage> {
   }
 
   void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showGlassToast(context, message);
   }
 
   String _fmt(int bytes) {

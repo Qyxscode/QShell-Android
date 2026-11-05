@@ -1,4 +1,6 @@
 import 'dart:io';
+import '../../design/glass_dialog.dart';
+import '../../design/glass_toast.dart';
 import '../../design/instant_route.dart';
 import '../../design/glass_card.dart';
 
@@ -115,9 +117,7 @@ class _SessionsPageState extends State<SessionsPage> {
   }
 
   void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showGlassToast(context, message);
   }
 
   void _open(QShellHost host) {
@@ -269,22 +269,16 @@ class _SessionsPageState extends State<SessionsPage> {
   }
 
   Future<void> _removeHost(QShellHost host) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(AppStrings.of(context).sessionsDeleteTitle),
-        content: Text(AppStrings.of(context).sessionsDeleteConfirmTemplate.replaceAll('{name}', host.name).replaceAll('{sub}', host.subtitle)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(AppStrings.of(context).commonCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(AppStrings.of(context).commonDelete),
-          ),
-        ],
-      ),
+    final ok = await showGlassConfirm(
+      context,
+      title: AppStrings.of(context).sessionsDeleteTitle,
+      message: AppStrings.of(context)
+          .sessionsDeleteConfirmTemplate
+          .replaceAll('{name}', host.name)
+          .replaceAll('{sub}', host.subtitle),
+      confirmText: AppStrings.of(context).commonDelete,
+      cancelText: AppStrings.of(context).commonCancel,
+      danger: true,
     );
     if (ok != true) return;
     final groups = await _store.removeHost(host);

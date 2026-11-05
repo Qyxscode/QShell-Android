@@ -1,4 +1,5 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
+import '../../../design/glass_toast.dart';
 import '../../../design/glass_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -236,14 +237,11 @@ class _TopoRow extends StatelessWidget {
           return;
         }
         Clipboard.setData(ClipboardData(text: value));
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(
-            SnackBar(
-              content: Text('已复制 ${data.title}：$value'),
-              duration: const Duration(milliseconds: 1200),
-            ),
-          );
+        showGlassToast(
+          context,
+          '已复制 ${data.title}：$value',
+          tone: GlassToastTone.success,
+        );
       },
       child: IntrinsicHeight(
         child: Row(

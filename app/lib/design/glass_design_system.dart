@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'design_system.dart';
+import 'tokens.dart';
 
 /// 液态玻璃风格（Glassmorphism）。
 ///
@@ -31,8 +32,8 @@ class GlassDesignSystem implements DesignSystem {
     // 玻璃主题：卡片透出背景的彩色光斑
     final baseTokens = tokensFromColorScheme(scheme);
     final tokens = baseTokens.copyWith(
-      background: isDark ? const Color(0xFF0A0D12) : const Color(0xFFE6EAF2),
-      surfaceCard: Colors.white.withValues(alpha: isDark ? 0.09 : 0.48),
+      background: isDark ? const Color(0xFF12161D) : const Color(0xFFE6EAF2),
+      surfaceCard: Colors.white.withValues(alpha: isDark ? 0.12 : 0.48),
       // 弹层比卡片实一些，否则内容透出来边界不清
       surfaceCardAlt: (isDark ? const Color(0xFF1B2028) : Colors.white)
           .withValues(alpha: isDark ? 0.94 : 0.96),
@@ -43,7 +44,9 @@ class GlassDesignSystem implements DesignSystem {
       outlineSoft: isDark
           ? Colors.white.withValues(alpha: 0.08)
           : Colors.black.withValues(alpha: 0.06),
-      track: Colors.white.withValues(alpha: isDark ? 0.16 : 0.5),
+      track: isDark
+      ? Colors.white.withValues(alpha: 0.16)
+      : Colors.black.withValues(alpha: 0.5),
       glass: true,
     );
 
@@ -89,8 +92,7 @@ class GlassDesignSystem implements DesignSystem {
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
-          // 1px 高光边，模拟玻璃厚度
+          borderRadius: BorderRadius.circular(AppTokens.cardRadius),
           side: BorderSide(color: tokens.outlineSoft, width: 1),
         ),
       ),
@@ -262,7 +264,7 @@ class GlassBackdrop extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = brightness == Brightness.dark;
     // 日间背景浅，光斑要给足才能透出玻璃感
-    final strength = isDark ? 0.46 : 0.52;
+    final strength = isDark ? 0.68 : 0.58;
     final wallpaperPath = wallpaper;
     if (wallpaperPath != null && wallpaperPath.isNotEmpty) {
       return Stack(

@@ -1,45 +1,73 @@
-# QShell 视觉系统规范
+# 液态玻璃设计系统（Liquid Glass Design System）
 
-> 本文档描述应用**全部**外观实现：颜色 token、主题配置、自定义组件、背景系统、
-> 路由转场、交互规范、已知限制与迁移模板。
+> 本文档是 **QClash（com.qclash.app）当前实现的完整视觉规范**，由 QShell 期文档与
+> QClash 现状合并整理而成，是唯一版本（历史旧的 QShell 内容已并入，不再单独保留）。
 >
-> 目标：拿到这份文档 + 对应源码，可以在另一个 Flutter 项目里复刻同一套视觉，
-> 或者交给 AI 照着实现。
+> 目标：拿到这份文档 + `lib/design/` 源码，可以在任意 Flutter 项目里复刻同一套视觉，
+> 或者交给 AI 照着重写。
 >
-> 版本对应：`v1.0.0+5` 之后的实现状态。
+> 参考源码：`anyproxy_client/lib/design/`（约 18 个文件）。
 
 ---
 
 ## 目录
 
-- [0. 快速理解](#0-快速理解)
+- [0. 快速开始（新项目 6 步）](#0-快速开始新项目-6-步)
 - [1. 设计原则](#1-设计原则)
-- [2. 文件结构](#2-文件结构)
-- [3. 主题架构](#3-主题架构)
-- [4. Token 完整规格](#4-token-完整规格)
-- [5. ThemeData 组件配置全表](#5-themedata-组件配置全表)
-- [6. 背景系统](#6-背景系统)
-- [7. 组件规格](#7-组件规格)
-- [8. 路由与转场](#8-路由与转场)
-- [9. 交互规范](#9-交互规范)
-- [10. 已知限制](#10-已知限制)
-- [11. 迁移模板](#11-迁移模板)
-- [12. 调参速查](#12-调参速查)
-- [13. 变更记录](#13-变更记录)
+- [2. 架构与数据流](#2-架构与数据流)
+- [3. Token 规格](#3-token-规格)
+- [4. 层级与透明度](#4-层级与透明度)
+- [5. 圆角 / 间距 / 字号](#5-圆角--间距--字号)
+- [6. 主题配置全表](#6-主题配置全表)
+- [7. 背景系统](#7-背景系统)
+- [8. 组件规范](#8-组件规范)
+- [9. 浮层体系](#9-浮层体系)
+- [10. 动效规范](#10-动效规范)
+- [11. 交互规范](#11-交互规范)
+- [12. 已知限制与陷阱](#12-已知限制与陷阱)
+- [13. 迁移与落地](#13-迁移与落地)
+- [14. 调参速查](#14-调参速查)
+- [15. 变更记录](#15-变更记录)
 
 ---
 
-## 0. 快速理解
+## 0. 快速开始（新项目 6 步）
 
-三个概念：
+1. 建 `lib/design/`，按依赖顺序复制：
+   `tokens.dart` → `design_system.dart` → `glass_design_system.dart` + `md3_design_system.dart`
+   → `glass_card.dart` / `glass_edge_painter.dart` → `glass_surface.dart`
+   → `glass_switch.dart` / `glass_slider.dart` → `segment_style.dart`
+   → `bottom_nav_bar.dart` → `page_shell.dart` / `wallpaper_page.dart` / `instant_route.dart`
+   → `expandable_section.dart` / `copyable_text.dart`
+   → `glass_sheet.dart` / `glass_menu.dart` / `glass_dialog.dart` / `glass_toast.dart` / `glass_select.dart`。
+2. `MaterialApp` 的 `theme` + `darkTheme` 都来自 `GlassDesignSystem.buildTheme`。
+3. 根组件外包 `ThemeScope`（`InheritedNotifier` 包 `ThemeController`），
+   管理 seed 色、壁纸、`glassRefraction`、`glassAllCards`。
+4. 页面 `Scaffold` 必须 `backgroundColor: Colors.transparent`，背景由 `WallpaperPage` / `GlassBackdrop` 统一铺。
+5. 所有 push 页面用 `InstantPageRoute`（自动套 `WallpaperPage`）。
+6. 页面里**只读 `AppTokens`**，不写死颜色；卡片只用 `GlassCard`，浮层只用第 9 节的 5 个入口。
 
-| 概念 | 含义 |
-|---|---|
-| **DesignLanguage** | 用户在设置里选的皮肤：`md3` / `glass` |
-| **DesignSystem** | 皮肤的代码实现，负责产出 `ThemeData` |
-| **AppTokens** | 从 `ThemeData` 里挂出来的语义 token，**页面只读这一层** |
+依赖：`provider`（或自写 InheritedWidget）、`shared_preferences`（外观持久化）。
+不需要第三方 UI 库。
 
-数据流：
+---
+
+## 1. 设计原则
+
+| # | 原则 | 说明 |
+|---|---|---|
+| 1 | **玻璃是层次，不是装饰** | 卡片 / 内嵌块 / 标签是三级不同亮度的"玻璃片"，靠 alpha 分层，不用阴影 |
+| 2 | **选中 = 更亮的一层** | 半透明高光 + 强调色描边，禁止实心色块 + 白字 |
+| 3 | **描边与背景反色** | 深色卡片配浅描边，浅色卡片配深描边，否则边界消失 |
+| 4 | **浮层才有模糊** | 滚动列表里的卡片不用 `BackdropFilter`（采样失效、掉帧）；模糊只给底栏和浮层 |
+| 5 | **颜色只从 token 取** | 页面代码不允许出现 `Color(0x…)`，圆角/颜色都走 `AppTokens` |
+| 6 | **动效克制、有弹性** | 位移/缩放可以过冲，透明度绝不 |
+| 7 | **无分割线** | 列表用间距与按压高亮区分 |
+| 8 | **性能优先于极致效果** | 卡片用静态玻璃；真实模糊只出现在固定元素与浮层 |
+
+---
+
+## 2. 架构与数据流
 
 ```
 用户选皮肤 → DesignLanguage.resolve() → DesignSystem.buildTheme()
@@ -47,204 +75,136 @@
         → 页面读 AppTokens.of(context).xxx
 ```
 
-**页面代码禁止出现写死的颜色**，一律用 `tokens.xxx`。
+**页面代码禁止出现写死的颜色**，一律 `tokens.xxx`。
 
----
+### 2.1 三个概念
 
-## 1. 设计原则
+| 概念 | 含义 |
+|---|---|
+| `DesignLanguage` | 用户在设置里选的皮肤：`md3` / `glass` |
+| `DesignSystem` | 皮肤实现，产出 `ThemeData` |
+| `AppTokens` | 挂在 `ThemeData.extensions` 上的语义 token，页面只读这一层 |
 
-1. **扁平 MD3 为基底**：没有拟物阴影、没有渐变描边、圆角统一。
-2. **玻璃是叠加层，不是替代品**：`glass` 主题复用同一套 token 结构，只是取值不同。
-3. **性能优先于极致效果**：卡片不做背景模糊（滚动会失效且掉帧），只有固定元素做。
-4. **一屏内材质一致**：卡片、顶栏按钮、输入框、底栏用同一套透明度和描边。
-5. **不做无谓的动效**：主题切换瞬时、页面转场 260ms、高亮滑动 260ms。
-
----
-
-## 2. 文件结构
-
-```
-lib/
-├── design/
-│   ├── design_system.dart          # DesignSystem 接口 + tokensFromColorScheme()
-│   ├── design_switcher.dart        # DesignLanguage 枚举与 resolve()
-│   ├── tokens.dart                 # AppTokens（ThemeExtension）
-│   ├── md3_design_system.dart      # MD3 皮肤
-│   ├── glass_design_system.dart    # 玻璃皮肤 + GlassBackdrop（光斑/壁纸背景）
-│   ├── glass_card.dart             # GlassCard（静态玻璃卡片）
-│   ├── glass_edge_painter.dart     # GlassEdgePainter（厚度描边，卡片/底栏共用）
-│   ├── liquid_glass.dart           # LiquidGlass（真实模糊容器）
-│   ├── wallpaper_page.dart         # WallpaperPage（push 页面的不透明背景）
-│   ├── instant_route.dart          # InstantPageRoute（滑动转场 + 自动包背景）
-│   └── fade_transitions.dart       # 页面转场 builder
-├── shell/
-│   ├── app_shell.dart              # 底栏容器 + PageView + 返回处理
-│   └── bottom_nav_bar.dart         # 玻璃胶囊底栏
-└── state/
-    ├── theme_controller.dart       # 全部外观设置的读写与持久化
-    └── theme_scope.dart            # InheritedNotifier，页面取 controller
-```
-
----
-
-## 3. 主题架构
-
-### 3.1 DesignSystem 接口
+### 2.2 DesignSystem 接口
 
 ```dart
 abstract interface class DesignSystem {
   String get id;      // 'md3' / 'glass'
   String get label;   // 设置页显示名
-
   ThemeData buildTheme({
     required Brightness brightness,
     required Color seed,
-    ColorScheme? dynamicScheme,   // Material You 取色结果
+    ColorScheme? dynamicScheme,   // Material You 取色
   });
 }
-```
 
-### 3.2 DesignLanguage 枚举
-
-```dart
 enum DesignLanguage {
   md3,
   glass;
 
-  static DesignSystem resolve(DesignLanguage language) {
-    switch (language) {
-      case DesignLanguage.md3:   return const Md3DesignSystem();
-      case DesignLanguage.glass: return const GlassDesignSystem();
-    }
-  }
+  static DesignSystem resolve(DesignLanguage l) => switch (l) {
+        DesignLanguage.md3 => const Md3DesignSystem(),
+        DesignLanguage.glass => const GlassDesignSystem(),
+      };
 }
 ```
 
-### 3.3 AppTokens 与 glass 标志
+### 2.3 ThemeController（外观状态）
 
-`AppTokens` 是 `ThemeExtension`，额外带一个 `bool glass`。
-页面用 `tokens.glass` 走分支，避免到处 import DesignSystem。
-
-```dart
-class AppTokens extends ThemeExtension<AppTokens> {
-  // ... 全部字段见第 4 节
-  final bool glass;   // 默认 false，只有 GlassDesignSystem 置 true
-}
-```
-
-### 3.4 设置状态（ThemeController）
-
-持久化 key 一览：
-
-| key | 类型 | 含义 |
+| 持久化 key | 类型 | 含义 |
 |---|---|---|
-| `appearance.mode` | int | `ThemeModeChoice`：system / light / dark |
-| `appearance.use_dynamic_color` | bool | Material You 取色开关 |
-| `appearance.seed` | int | 强调色（ARGB32） |
+| `appearance.mode` | int | system / light / dark |
+| `appearance.use_dynamic_color` | bool | Material You 取色 |
+| `appearance.seed` | int (ARGB32) | 强调色 |
 | `appearance.design_language` | int | `DesignLanguage.index` |
-| `appearance.glass_refraction` | bool | 底栏是否真实模糊 |
-| `appearance.glass_all_cards` | bool | 卡片是否走玻璃质感 |
-| `appearance.wallpaper` | String? | 壁纸文件路径 |
-| `appearance.wallpaper_dim` | double | 壁纸压暗（0~0.8，默认 0.35） |
-| `terminal.font_size` | double | 终端字号（10~22，默认 13） |
-| `terminal.bg_color` | int? | 终端背景色 |
-| `terminal.bg_image` | String? | 终端背景图 |
-| `terminal.fg_color` | int? | 终端前景色 |
-
-页面拿到 controller：
+| `appearance.glass_refraction` | bool | 底栏是否真实模糊/折射 |
+| `appearance.glass_all_cards` | bool | 卡片是否走玻璃质感（默认 true） |
+| `appearance.wallpaper` | String? | 壁纸路径 |
+| `appearance.wallpaper_dim` | double | 压暗 0~0.9，默认 0.35 |
 
 ```dart
-final controller = ThemeScope.of(context);          // 有断言
-final maybe = ThemeScope.maybeOf(context);          // 可能为 null（测试场景）
+final controller = ThemeScope.of(context);        // 有断言
+final maybe = ThemeScope.maybeOf(context);        // 可能为 null（测试）
 ```
 
 ---
 
-## 4. Token 完整规格
+## 3. Token 规格
 
-### 4.1 字段清单
+### 3.1 字段清单
 
 | 字段 | 用途 |
 |---|---|
 | `background` | 页面底色 |
 | `surfaceCard` | 卡片 |
-| `surfaceCardAlt` | 弹层 / 次级卡片 / 输入框 |
-| `outline` | 强描边 |
-| `outlineSoft` | 弱描边（卡片、分隔线） |
-| `textPrimary` | 主文字 |
-| `textSecondary` | 次要文字 |
-| `textDisabled` | 禁用文字 / 占位 |
-| `accent` | 强调色 |
-| `onAccent` | 强调色上的文字 |
-| `accentSoft` | 强调色容器（选中态底色） |
-| `onAccentSoft` | 强调色容器上的文字 |
-| `highlight` | 次强调（蜂窝卡等） |
-| `onHighlight` | 次强调上的文字 |
-| `success` | 成功 |
-| `warning` | 警告 |
-| `danger` | 危险 |
-| `track` | 进度条轨道 |
+| `surfaceCardAlt` | 内嵌块 / 弹层底 |
+| `outline` | 强描边（选中边、焦点边） |
+| `outlineSoft` | 弱描边（卡片边、分隔） |
+| `textPrimary / textSecondary / textDisabled` | 三级文字 |
+| `accent / onAccent` | 强调色及其前景 |
+| `accentSoft / onAccentSoft` | 强调色容器 |
+| `highlight / onHighlight` | 第三色 |
+| `success / warning / danger` | 状态色 |
+| `track` | 关闭态轨道 / 进度轨道 |
 | `glass` | 是否玻璃主题 |
+| `surfaceFloating`（getter） | 弹层实色底 = `surfaceCardAlt` 去 alpha |
+| `cardRadius = 16`（static const） | 卡片圆角全局唯一来源 |
 
-### 4.2 MD3 取值
+### 3.2 玻璃主题取值
 
-由 `tokensFromColorScheme(scheme)` 从 `ColorScheme` 映射：
-
-| token | 来源 |
-|---|---|
-| `background` | `scheme.surface` |
-| `surfaceCard` | `scheme.surfaceContainer` |
-| `surfaceCardAlt` | `scheme.surfaceContainerHigh` |
-| `outline` | `scheme.outline` |
-| `outlineSoft` | `scheme.outlineVariant` |
-| `textPrimary` | `scheme.onSurface` |
-| `textSecondary` | `scheme.onSurfaceVariant` |
-| `textDisabled` | `scheme.onSurface` @ 38% |
-| `accent` | `scheme.primary` |
-| `onAccent` | `scheme.onPrimary` |
-| `accentSoft` | `scheme.primaryContainer` |
-| `onAccentSoft` | `scheme.onPrimaryContainer` |
-| `highlight` | `scheme.tertiary` |
-| `onHighlight` | `scheme.onTertiary` |
-| `success` | 日 `#1B7F45` / 夜 `#6DD58C` |
-| `warning` | 日 `#9A6B00` / 夜 `#F3C969` |
-| `danger` | `scheme.error` |
-| `track` | `scheme.surfaceContainerHighest` |
-| `glass` | `false` |
-
-### 4.3 玻璃主题取值（日间 / 夜间）
-
-| token | 日间 | 夜间 |
+| token | 深色 | 浅色 |
 |---|---|---|
-| `background` | `#E6EAF2` | `#0A0D12` |
-| `surfaceCard` | 白 48% | 白 9% |
-| `surfaceCardAlt` | 白 96% | `#1B2028` 94% |
-| `outline` | 黑 10% | 白 12% |
-| `outlineSoft` | 黑 6% | 白 8% |
-| `textPrimary` | `onSurface` | `onSurface` |
-| `textSecondary` | `onSurfaceVariant` | 同左 |
-| `textDisabled` | `onSurface` 38% | 同左 |
-| `accent` / `onAccent` | 来自 ColorScheme | 同左 |
-| `accentSoft` / `onAccentSoft` | 来自 ColorScheme | 同左 |
-| `highlight` / `onHighlight` | 来自 ColorScheme | 同左 |
-| `success` | `#1B7F45` | `#6DD58C` |
-| `warning` | `#9A6B00` | `#F3C969` |
-| `danger` | `scheme.error` | 同左 |
-| `track` | 白 50% | 白 16% |
-| `glass` | `true` | `true` |
+| background | `#12161D` | `#E6EAF2` |
+| surfaceCard | 白 12% | 白 48% |
+| surfaceCardAlt | `#1B2028` 94% | 白 96% |
+| outline | 白 12% | 黑 10% |
+| outlineSoft | 白 8% | 黑 6% |
+| track | 白 16% | 黑 50% |
+| textPrimary | `scheme.onSurface` | 同左 |
+| textSecondary | `scheme.onSurfaceVariant` | 同左 |
+| textDisabled | `onSurface` 38% | 同左 |
+| accent | `scheme.primary` | 同左 |
+| success | `#6DD58C` | `#1B7F45` |
+| warning | `#F3C969` | `#9A6B00` |
+| danger | `scheme.error` | 同左 |
+| glass | `true` | `true` |
 
-**注意**：描边颜色跟随亮度**反转**（浅底配深边、深底配浅边），否则浅色卡片上看不见边界。
+> 深色背景取 `#12161D` 而不是纯黑：纯黑下玻璃卡片完全没有层次。
 
-### 4.4 生成代码
+### 3.3 MD3 主题取值
+
+```dart
+AppTokens tokensFromColorScheme(ColorScheme scheme) => AppTokens(
+      background: scheme.surface,
+      surfaceCard: scheme.surfaceContainer,
+      surfaceCardAlt: scheme.surfaceContainerHigh,
+      outline: scheme.outline,
+      outlineSoft: scheme.outlineVariant,
+      textPrimary: scheme.onSurface,
+      textSecondary: scheme.onSurfaceVariant,
+      textDisabled: scheme.onSurface.withValues(alpha: 0.38),
+      accent: scheme.primary,
+      onAccent: scheme.onPrimary,
+      accentSoft: scheme.primaryContainer,
+      onAccentSoft: scheme.onPrimaryContainer,
+      highlight: scheme.tertiary,
+      onHighlight: scheme.onTertiary,
+      success: isDark ? const Color(0xFF6DD58C) : const Color(0xFF1B7F45),
+      warning: isDark ? const Color(0xFFF3C969) : const Color(0xFF9A6B00),
+      danger: scheme.error,
+      track: scheme.surfaceContainerHighest,
+    );
+```
+
+### 3.4 生成代码（玻璃）
 
 ```dart
 final scheme = dynamicScheme ??
     ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
-final isDark = brightness == Brightness.dark;
-
-final tokens = tokensFromColorScheme(scheme).copyWith(
-  background: isDark ? const Color(0xFF0A0D12) : const Color(0xFFE6EAF2),
-  surfaceCard: Colors.white.withValues(alpha: isDark ? 0.09 : 0.48),
+final base = tokensFromColorScheme(scheme);
+final tokens = base.copyWith(
+  background: isDark ? const Color(0xFF12161D) : const Color(0xFFE6EAF2),
+  surfaceCard: Colors.white.withValues(alpha: isDark ? 0.12 : 0.48),
   surfaceCardAlt: (isDark ? const Color(0xFF1B2028) : Colors.white)
       .withValues(alpha: isDark ? 0.94 : 0.96),
   outline: isDark
@@ -260,53 +220,100 @@ final tokens = tokensFromColorScheme(scheme).copyWith(
 
 ---
 
-## 5. ThemeData 组件配置全表
+## 4. 层级与透明度
 
-玻璃主题 `buildTheme()` 里覆盖的组件（按出现顺序）。
+| 层级 | 组件 | 底色 | 圆角 | 描边 |
+|---|---|---|---|---|
+| L1 卡片 | `GlassCard` | `surfaceCard`（白 12% / 48%） | 16 | 渐变 + 多层描边，无阴影 |
+| L2 内嵌块 | 卡片内分组块、地址块、统计块、列表项 | `surfaceCardAlt` 22% | 12 | **无描边** |
+| L3 标签 | 状态 / 类型标签 | 强调色 14% | 5~6 | 强调色 25%（玻璃） |
+| 浮层 | 弹窗 / 菜单 / toast / 对话框 | `GlassSurface`：`surfaceFloating` 36~56% | 12/16/20/24 | 厚度描边 |
 
-### 5.1 基础
+**L2 不要描边**：L1 已有一圈玻璃边缘，L2 再描边就是"卡片里贴卡片"，页面会碎。
+
+**L3 不要反色**：标签禁止「实心 accent + 白字」；正确的是同色系文字 +
+低透明度底，像光透过彩色玻璃。
+
+**选中态**：
+
+| 主题 | 选中底色 | 描边 | 文字 |
+|---|---|---|---|
+| glass 深色 | 白 22% | accent 75%，1.2px | textPrimary |
+| glass 浅色 | accent 26% | accent 75%，1.2px | textPrimary |
+| glass 未选 | 白 4%（深）/ 28%（浅） | outlineSoft 1px | textSecondary |
+| md3 | accentSoft（实心） | outlineSoft | onAccentSoft |
+
+约束：选中/未选亮度差 **≥ 4 倍**（22% vs 4%），否则户外不可辨；
+所有"一组选一个"的控件统一走 `segmentStyle(context, tokens)`，**禁止页面内联 ButtonStyle**。
+
+---
+
+## 5. 圆角 / 间距 / 字号
+
+### 5.1 圆角
+
+| 元素 | 值 |
+|---|---|
+| 卡片（全局常量） | **16** |
+| 内嵌块 | 12 |
+| 输入框 / 分段按钮 / 选择框 | 12~14 |
+| 标签 | 5~6 |
+| 底部弹窗 / 悬浮面板 | 24 |
+| 确认框 | 20 |
+| 菜单 / toast | 16 / 12 |
+| 底栏胶囊 / 高亮 | 22 / 16 |
+| 图标按钮 | 40×40 圆形 |
+
+### 5.2 间距
+
+- 页面左右：主 Tab 16~20，二级页 20
+- 卡片内边距：16~20（紧凑列表 12）
+- 卡片间距：12~16
+- 列表底部留白：110（给玻璃底栏让位）
+- 图标与文字：8~10
+
+### 5.3 字号
+
+| 用途 | 字号 | 字重 |
+|---|---|---|
+| 二级页标题 | 19 | bold |
+| 区块 / 卡片标题 | 15~15.5 | bold |
+| 列表行标题 | 13~13.5 | normal / 600 |
+| 正文 / 说明 | 12~13（行高 1.35~1.4） | normal |
+| 次级说明 | 11~11.5 | normal |
+| 标签 | 9~11 | 600~bold |
+| 仪表盘数字 | 26 | w700 + `tabularFigures` |
+| 速率单位 | 11 | w600 |
+
+数字类统一 `fontFeatures: [FontFeature.tabularFigures()]`，避免每秒刷新抖动。
+
+---
+
+## 6. 主题配置全表
+
+### 6.1 基础
 
 ```dart
 ThemeData(
   useMaterial3: true,
   colorScheme: scheme,
   brightness: brightness,
-  // 页面 Scaffold 必须透明，否则会盖住背景层（光斑/壁纸）
+  // 页面 Scaffold 必须透明，否则盖住背景层
   scaffoldBackgroundColor: Colors.transparent,
-  // Navigator 的默认底色也透明，避免 push 瞬间露底色
+  // Navigator 默认底色也透明，避免 push 瞬间露底色
   canvasColor: Colors.transparent,
   visualDensity: VisualDensity.adaptivePlatformDensity,
   splashFactory: InkSparkle.splashFactory,
 )
 ```
 
-### 5.2 AppBar
+### 6.2 AppBar
 
-```dart
-appBarTheme: AppBarTheme(
-  backgroundColor: Colors.transparent,
-  foregroundColor: tokens.textPrimary,
-  elevation: 0,
-  scrolledUnderElevation: 0,
-  centerTitle: false,
-  titleTextStyle: base.textTheme.titleLarge?.copyWith(
-    color: tokens.textPrimary,
-    fontWeight: FontWeight.w600,
-  ),
-  // 状态栏/导航栏图标跟随主题反色
-  systemOverlayStyle: (isDark
-          ? SystemUiOverlayStyle.light
-          : SystemUiOverlayStyle.dark)
-      .copyWith(
-    statusBarColor: Colors.transparent,
-    systemNavigationBarColor: Colors.transparent,
-  ),
-  // 让右上角圆形按钮的边缘与下方卡片对齐（卡片左右各 16）
-  actionsPadding: const EdgeInsets.only(right: 10),
-)
-```
+透明底、`elevation: 0`、`scrolledUnderElevation: 0`、`centerTitle: false`、
+标题 19 w600、`actionsPadding: right 10`（让右上圆钮与卡片边缘对齐）、
+系统状态栏/导航栏透明且图标跟随明暗反色。
 
-### 5.3 Card
+### 6.3 Card（仅非玻璃回退）
 
 ```dart
 cardTheme: CardThemeData(
@@ -316,18 +323,19 @@ cardTheme: CardThemeData(
   margin: EdgeInsets.zero,
   clipBehavior: Clip.antiAlias,
   shape: RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(22),
+    borderRadius: BorderRadius.circular(AppTokens.cardRadius),
     side: BorderSide(color: tokens.outlineSoft, width: 1),
   ),
 )
 ```
 
-### 5.4 图标按钮
+### 6.4 图标按钮
+
+玻璃主题下裸图标不成体系，统一 40×40 圆形 + 白 8%/40% 底：
 
 ```dart
 iconButtonTheme: IconButtonThemeData(
   style: IconButton.styleFrom(
-    // 与卡片同档透明度
     backgroundColor: Colors.white.withValues(alpha: isDark ? 0.08 : 0.40),
     foregroundColor: tokens.textPrimary,
     shape: const CircleBorder(),
@@ -339,7 +347,7 @@ iconButtonTheme: IconButtonThemeData(
 )
 ```
 
-### 5.5 输入框
+### 6.5 输入框
 
 ```dart
 inputDecorationTheme: InputDecorationTheme(
@@ -363,9 +371,9 @@ inputDecorationTheme: InputDecorationTheme(
 )
 ```
 
-### 5.6 按钮族
+### 6.6 按钮族
 
-**FilledButton（主按钮）**
+**FilledButton（主按钮 = 彩色玻璃）**
 
 ```dart
 filledButtonTheme: FilledButtonThemeData(
@@ -387,46 +395,11 @@ filledButtonTheme: FilledButtonThemeData(
 )
 ```
 
-**OutlinedButton**
+**OutlinedButton**：白 8%/42% 底 + `outlineSoft` 边 + 胶囊圆角。
+**TextButton**：前景 accent，胶囊圆角。
+**ElevatedButton**：白 12%/55% 底、`elevation: 0`、`outlineSoft` 边（不用 M3 阴影）。
 
-```dart
-outlinedButtonTheme: OutlinedButtonThemeData(
-  style: OutlinedButton.styleFrom(
-    backgroundColor: Colors.white.withValues(alpha: isDark ? 0.08 : 0.42),
-    foregroundColor: tokens.textPrimary,
-    side: BorderSide(color: tokens.outlineSoft),
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(100),
-    ),
-    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-  ),
-)
-```
-
-**TextButton / ElevatedButton**
-
-```dart
-textButtonTheme: TextButtonThemeData(
-  style: TextButton.styleFrom(
-    foregroundColor: tokens.accent,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
-  ),
-),
-elevatedButtonTheme: ElevatedButtonThemeData(
-  style: ElevatedButton.styleFrom(
-    backgroundColor: Colors.white.withValues(alpha: isDark ? 0.12 : 0.55),
-    foregroundColor: tokens.textPrimary,
-    elevation: 0,
-    shadowColor: Colors.transparent,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(100),
-      side: BorderSide(color: tokens.outlineSoft),
-    ),
-  ),
-),
-```
-
-### 5.7 分段按钮
+### 6.7 分段按钮（主题级）
 
 ```dart
 segmentedButtonTheme: SegmentedButtonThemeData(
@@ -448,128 +421,44 @@ segmentedButtonTheme: SegmentedButtonThemeData(
 )
 ```
 
-> 用 `ButtonStyle` + `WidgetStateProperty` 而不是 `styleFrom`，避免选中色被 MD3 默认态覆盖。
+> 用 `ButtonStyle` + `WidgetStateProperty` 而非 `styleFrom`，
+> 避免选中色被 MD3 默认态覆盖。
+> 页面级仍应使用 `segmentStyle(context, tokens)`（见 8.6），保持一致。
 
-### 5.8 其余组件
+### 6.8 其余组件
 
-```dart
-// 开关
-switchTheme: SwitchThemeData(
-  thumbColor: WidgetStateProperty.resolveWith((states) =>
-      states.contains(WidgetState.selected) ? tokens.onAccent : tokens.outline),
-  trackColor: WidgetStateProperty.resolveWith((states) =>
-      states.contains(WidgetState.selected) ? tokens.accent : tokens.track),
-),
-
-// 列表
-listTileTheme: ListTileThemeData(
-  selectedTileColor: tokens.accent.withValues(alpha: 0.12),
-  iconColor: tokens.textSecondary,
-),
-
-// 展开项：背景透明，交给外层卡片
-expansionTileTheme: ExpansionTileThemeData(
-  backgroundColor: Colors.transparent,
-  collapsedBackgroundColor: Colors.transparent,
-  shape: const Border(),
-  collapsedShape: const Border(),
-  iconColor: tokens.accent,
-  collapsedIconColor: tokens.textSecondary,
-),
-
-// 滑块
-sliderTheme: SliderThemeData(
-  activeTrackColor: tokens.accent.withValues(alpha: 0.85),
-  inactiveTrackColor: Colors.white.withValues(alpha: isDark ? 0.10 : 0.42),
-  thumbColor: tokens.accent,
-  overlayColor: tokens.accent.withValues(alpha: 0.12),
-),
-
-// Chip
-chipTheme: ChipThemeData(
-  backgroundColor: Colors.white.withValues(alpha: isDark ? 0.08 : 0.42),
-  side: BorderSide(color: tokens.outlineSoft),
-  labelStyle: base.textTheme.labelMedium?.copyWith(color: tokens.textSecondary),
-),
-
-// 弹层（BottomSheet）
-bottomSheetTheme: BottomSheetThemeData(
-  backgroundColor: tokens.surfaceCardAlt,
-  surfaceTintColor: Colors.transparent,
-  showDragHandle: true,
-  shape: const RoundedRectangleBorder(
-    borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-  ),
-),
-
-// 对话框
-dialogTheme: DialogThemeData(
-  backgroundColor: tokens.surfaceCardAlt,
-  surfaceTintColor: Colors.transparent,
-  shape: RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(26),
-    side: BorderSide(color: tokens.outlineSoft),
-  ),
-),
-
-// 提示条
-snackBarTheme: SnackBarThemeData(
-  behavior: SnackBarBehavior.floating,
-  backgroundColor:
-      (isDark ? const Color(0xFF1B2028) : Colors.white).withValues(alpha: 0.96),
-  contentTextStyle:
-      base.textTheme.bodyMedium?.copyWith(color: tokens.textPrimary),
-),
-
-// 分隔线
-dividerTheme: DividerThemeData(
-  color: tokens.outlineSoft,
-  thickness: 1,
-  space: 1,
-),
-```
+| 组件 | 配置要点 |
+|---|---|
+| `listTileTheme` | `selectedTileColor: accent 12%`、`iconColor: textSecondary` |
+| `expansionTileTheme` | 背景/收起背景透明、`shape`/`collapsedShape: Border()`（避免自带边框） |
+| `chipTheme` | 白 8%/42% 底 + `outlineSoft` 边 + `textSecondary` 标签 |
+| `sliderTheme` | 轨道 accent 85%、inactive 白 10%/42%、thumb 白、overlay accent 12% |
+| `dividerTheme` | `outlineSoft`、1px、`space: 1`（列表不用，仅表单分隔） |
+| `tooltipTheme` | 半透明 `surfaceFloating`（玻璃 90%）+ `outlineSoft` 描边 + 圆角 8 + 11.5 字 + 等待 450ms |
+| `bottomSheetTheme` / `dialogTheme` / `snackBarTheme` / `popupMenuTheme` | **刻意留空**：这些系统组件已全部由自绘浮层替代，配置留着会误导 |
 
 ---
 
-## 6. 背景系统
+## 7. 背景系统
 
-### 6.1 层级总览
+### 7.1 层级总览
 
 ```
-MaterialApp.builder 之外
+MaterialApp 之外
 └── Directionality
     └── Stack
-        ├── RepaintBoundary(背景层)      ← 所有路由共享
+        ├── RepaintBoundary(背景层)        ← 所有路由共享
         │     ├── 无壁纸：GlassBackdrop（光斑）
         │     └── 有壁纸：Image.file + 压暗
         └── MaterialApp
             └── Navigator
-                ├── AppShell（4 个 Tab 页，Scaffold 透明）
+                ├── AppShell（Tab 页，Scaffold 透明）
                 └── push 页面（WallpaperPage 自带背景）
 ```
 
-### 6.2 全局背景层
+背景层必须包 `RepaintBoundary`：转场时不重绘，避免闪屏。
 
-```dart
-Positioned.fill(
-  child: RepaintBoundary(     // 转场时不重绘，避免闪
-    child: tokens.glass
-        ? GlassBackdrop(
-            accent: tokens.accent,
-            brightness: isDark ? Brightness.dark : Brightness.light,
-            background: tokens.background,
-            wallpaper: controller.wallpaper,
-            wallpaperDim: controller.wallpaperDim,
-            child: const SizedBox.expand(),
-          )
-        : ColoredBox(color: tokens.background),
-  ),
-),
-```
-
-### 6.3 光斑（无壁纸时）
-
-三个径向渐变圆，跟随强调色：
+### 7.2 光斑（无壁纸）
 
 | 位置 | 尺寸 | 透明度 |
 |---|---|---|
@@ -577,13 +466,10 @@ Positioned.fill(
 | `top: 140, right: -90` | 260 | `strength × 0.7` |
 | `bottom: -120, left: 40` | 320 | `strength × 0.55` |
 
-`strength`：日间 **0.52**、夜间 **0.46**（日间底色浅，需要更强才能看出来）。
+`strength`：QClash 深色 **0.68** / 浅色 **0.58**（浅色底亮，需要更强才看得出来）。
+每个光斑是 `RadialGradient(colors: [color, color 透明], stops: [0, 1])`。
 
-每个圆是 `RadialGradient(colors: [color, color.withValues(alpha: 0)], stops: [0, 1])`。
-
-### 6.4 壁纸
-
-选了壁纸后：
+### 7.3 壁纸
 
 ```dart
 Stack(
@@ -597,7 +483,7 @@ Stack(
       gaplessPlayback: true,     // 重建时保留上一帧
       errorBuilder: (_, __, ___) => const SizedBox.shrink(),
     ),
-    ColoredBox(                  // 压暗，保证文字可读
+    ColoredBox(
       color: (isDark ? Colors.black : Colors.white)
           .withValues(alpha: wallpaperDim),
     ),
@@ -606,44 +492,35 @@ Stack(
 )
 ```
 
-- `wallpaperDim` 由设置页滑块控制，范围 0~0.8，默认 **0.35**
-- 壁纸文件**必须**用时间戳命名（`wallpaper_<ms>.img`），否则 `Image.file` 按路径缓存导致换图不生效
+- `wallpaperDim` 0~0.9，默认 0.35
+- 壁纸文件**必须**用时间戳命名（`wallpaper_<ms>.img`），
+  否则 `Image.file` 按路径缓存，换图不生效
 
-### 6.5 Tab 页 vs push 页
+### 7.4 Tab 页 vs push 页
 
-| | Tab 页（4 个） | push 页 |
+| | Tab 页 | push 页 |
 |---|---|---|
 | 背景来源 | 全局背景层透上来 | `WallpaperPage` 自己画 |
 | Scaffold | 透明 | 透明（背景由 WallpaperPage 提供） |
-| 光斑/壁纸 | 与全局一致 | **无壁纸时用 `GlassBackdrop`**，有壁纸时画同一张图 |
+| 光斑/壁纸 | 与全局一致 | 无壁纸时 `GlassBackdrop`，有壁纸时同一张图 |
 | 压暗 | 全局 `wallpaperDim` | `wallpaperDim + 0.06`（更深一档，形成"第二层"） |
 
-```dart
-// WallpaperPage 无壁纸分支（必须复用光斑，否则和主页割裂）
-return GlassBackdrop(
-  accent: tokens.accent,
-  brightness: Theme.of(context).brightness,
-  background: tokens.background,
-  wallpaper: null,
-  wallpaperDim: dim,
-  child: child,
-);
-```
+**没有背景光斑时，玻璃卡片就是一块灰板。** 背景是风格的组成部分。
 
 ---
 
-## 7. 组件规格
+## 8. 组件规范
 
-### 7.1 GlassCard（卡片）
+### 8.1 GlassCard
 
-**不做 BackdropFilter**——Flutter 的 backdrop 在滚动容器里会随内容平移短暂失效（模糊忽隐忽现），卡片是列表里最常见的元素，必须稳定。
+**不做 BackdropFilter**——滚动容器里 backdrop 会随内容平移失效（模糊忽隐忽现），
+卡片是列表里最常见的元素，必须稳定。
 
 ```dart
 ClipRRect(
-  borderRadius: borderRadius,   // 默认 20
+  borderRadius: BorderRadius.circular(AppTokens.cardRadius),
   child: Stack(
     children: [
-      // 玻璃本体
       Positioned.fill(
         child: DecoratedBox(
           decoration: BoxDecoration(
@@ -661,210 +538,145 @@ ClipRRect(
           ),
         ),
       ),
-      // 厚度描边
       Positioned.fill(
         child: IgnorePointer(
           child: CustomPaint(
-            painter: GlassEdgePainter(isDark: isDark, radius: 20),
+            painter: GlassEdgePainter(
+              isDark: isDark,
+              radius: AppTokens.cardRadius,
+            ),
           ),
         ),
       ),
-      Material(
-        color: Colors.transparent,
-        clipBehavior: clipBehavior,
-        child: child,
-      ),
+      Material(color: Colors.transparent, clipBehavior: clipBehavior, child: child),
     ],
   ),
 )
 ```
 
-**参数兼容**：`margin` / `elevation` / `color` / `shape` / `clipBehavior` / `borderRadius`，
-与 Flutter 的 `Card` 对齐，方便批量替换。
+参数与 `Card` 对齐：`margin / elevation / color / shape / clipBehavior / borderRadius`。
 
-**启用条件**：`refraction ?? ThemeScope.maybeOf(context)?.glassAllCards ?? false`
-且 `tokens.glass == true`，否则退化成普通 `Card`。
+启用条件：`refraction ?? ThemeScope.maybeOf(context)?.glassAllCards ?? true`
+且 `tokens.glass == true`，否则退化为普通 `Card`。
 
-### 7.2 GlassEdgePainter（厚度）
+**卡片内点击**：`InkWell(borderRadius: BorderRadius.circular(AppTokens.cardRadius))`。
 
-四层绘制，卡片与底栏共用：
+### 8.2 GlassEdgePainter（厚度）
+
+三层绘制，卡片与底栏共用：
 
 | 层 | 参数 | 作用 |
 |---|---|---|
-| 1. 外圈亮线 | 宽 `1.2 × strength`，内缩 0.6，白 55%→18%（日）/ 22%→6%（夜）纵向渐变 | 玻璃外缘反光 |
-| 2. 内圈暗线 | 宽 `1 × strength`，内缩 2.0，黑 5%（日）/ 22%（夜） | 制造"两层边"的厚度分界 |
-| 3. 顶部高光 | 宽 `1.6 × strength`，内缩 1.0，白 55%→16%→0 纵向渐变（stops 0/0.32/0.62） | 光从上方打进来 |
+| 外圈亮线 | 宽 `1.2 × strength`，内缩 0.6，白 55%→18%（日）/ 22%→6%（夜）纵向渐变 | 外缘反光 |
+| 内圈暗线 | 宽 `1 × strength`，内缩 2.0，黑 5%（日）/ 22%（夜） | "两层边"的厚度分界 |
+| 顶部高光 | 宽 `1.6 × strength`，内缩 1.0，白 55%→16%→0（stops 0/0.32/0.62） | 光从上方打进来 |
 
 `strength`：卡片 1.0，底栏 1.15。
+**顶部高光必须用渐变淡出**，不能用 `clipRect` 硬切（会留下生硬断口）。
 
-**关键**：顶部高光**必须用渐变淡出**，不能用 `clipRect` 切一刀（会留下生硬断口）。
+### 8.3 LiquidGlass（真实模糊容器）
 
-### 7.3 LiquidGlass（真实模糊容器）
-
-用于固定元素（底栏），能安全用 `BackdropFilter`。
+用于固定元素（底栏）：
 
 ```dart
 ClipRRect(
-  borderRadius: borderRadius,
+  borderRadius: borderRadius,      // 默认 22
   child: BackdropFilter(
-    filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),   // blur 默认 3
-    child: Stack(
-      children: [
-        if (tint > 0)
-          ColoredBox(color: (isDark ? Colors.black : Colors.white)
-              .withValues(alpha: tint)),        // 默认 0.06
-        // 厚度渐变（depth 默认 0.18）
-        DecoratedBox(LinearGradient[白 0.55×depth, 透明, 黑 0.28×depth]),
-        // 描边
-        CustomPaint(GlassEdgePainter(isDark: isDark, radius: r, strength: 1.15)),
-        child,
-      ],
-    ),
+    filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),  // 默认 3
+    child: Stack(children: [
+      if (tint > 0) ColoredBox(...),                          // 默认 0.06
+      DecoratedBox(LinearGradient[白 0.55×depth, 透明, 黑 0.28×depth]), // depth 0.16
+      CustomPaint(GlassEdgePainter(isDark: isDark, radius: r, strength: 1.15)),
+      child,
+    ]),
   ),
 )
 ```
 
-**不要**在 `filter` 里用 `ImageFilter.matrix`：放大采样在滚动/转场时会越界，
-导致玻璃整块失效。
+**不要**在 filter 里用 `ImageFilter.matrix`（放大采样在滚动/转场时越界，
+玻璃整块失效）。`ImageFilter.shader` 也不可用（部分机型返回白色）。
 
-### 7.4 BottomNavBar（底栏）
+### 8.4 GlassSurface（浮层玻璃）
+
+- `BackdropFilter` 模糊 16~24
+- 底色渐变（顶部 +6% 高光）+ `GlassEdgePainter` 厚度描边
+- 阴影画在裁剪层**外面**（否则被 `ClipRRect` 裁掉）
+- 参数：`borderRadius / blur / opacity / padding / showEdge / shadow`
+- 非玻璃主题自动 `opacity = 1`（实色）
+
+**禁止在包含 `BackdropFilter` 的子树外套 `Opacity` / `FadeTransition`**：
+离屏层会导致模糊采样失效（"框先出来、毛玻璃延迟出现"）。
+
+### 8.5 GlassSwitch / GlassSwitchTile
+
+| 属性 | 值 |
+|---|---|
+| 尺寸 | 48 × 28（紧凑 42 × 24），滑块 = height - 6 |
+| 轨道（开） | accent 72% / 禁用 30% |
+| 轨道（关） | 白 10%（深）/ 黑 10%（浅），几乎融进卡片 |
+| 描边 | 开：accent 85%；关：outlineSoft |
+| 光晕（开） | accent 26%，blur 10 |
+| 滑块 | 开 `onAccent`，关白色 |
+| 过渡 | 轨道 220ms；按下 120ms；支持拖动（≥10px 才切换） |
+
+`GlassSwitchTile`：标题 14 + 副标题 11.5（行高 1.35）+ 右侧开关，上下 padding 8；
+禁用时标题 `textDisabled`。
+
+### 8.6 GlassSlider + segmentStyle
+
+- `GlassSlider`：高 28、轨道 5、滑块 18；玻璃主题滑块白色、轨道 accent 85%；
+  手动 `GestureDetector` 拖拽（不是 Material Slider）
+- `segmentStyle(context, tokens)`：圆角 12、最小高度 34；
+  选中 深白 22% / 浅 accent 26% + accent 45% 描边，文字 `textPrimary`；
+  未选 白 4% / 28%，文字 `textSecondary`；
+  4 段以上标签缩 2 字 + `softWrap: false`，全名放 `tooltip`
+
+### 8.7 GlassBottomNavBar
 
 | 参数 | 值 |
 |---|---|
 | 高度 | 66 |
-| 左右内边距 `_pad` | 5 |
-| 外层宽度 | 320（`SizedBox`） |
+| 内边距 `_pad` | 5 |
+| 布局 | 左右各 16 撑满整行 |
 | 圆角 | 22 |
-| 底盘颜色 | 日间 白 14% / 夜间 黑 16% |
-| 高亮胶囊 | 日间 `accent` 13% / 夜间 白 10%，边框白 12% |
+| 模糊 | sigma 16 |
+| 底盘 | 日 白 14% / 夜 黑 16% |
+| 高亮胶囊 | 日 accent 13% / 夜 白 10%，边框白 12% |
 | 高亮圆角 | 16 |
-| 拖动时放大 | 1.26 倍（`AnimatedScale` 180ms） |
-| 高亮位移时长 | 260ms `easeOutCubic` |
+| 高亮位移 | 260ms `easeOutCubic` |
+| 拖动放大 | 1.26 倍（`AnimatedScale` 180ms） |
+| 图标 / 标签 | 20 / 10.5 |
 
-**结构**（关键：内容层不裁剪，高亮才能溢出）：
+**结构关键**：内容层不裁剪（`Stack(clipBehavior: Clip.none)`），高亮才能溢出；
+底层用 `ClipRRect + BackdropFilter` 做模糊。
 
-```dart
-SizedBox(
-  height: 66,
-  child: Stack(
-    clipBehavior: Clip.none,        // ← 允许溢出
-    children: [
-      Positioned.fill(               // 底层：裁剪做模糊
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
-          child: LiquidGlass(...) 或 BackdropFilter(...),
-        ),
-      ),
-      Positioned.fill(               // 描边
-        child: IgnorePointer(
-          child: CustomPaint(
-            painter: GlassEdgePainter(radius: 22, strength: 1.15),
-          ),
-        ),
-      ),
-      Positioned.fill(child: gesture),  // 内容层：高亮 + 按钮
-    ],
-  ),
-)
-```
+**对齐公式**：高亮宽度 `= (总宽 - 2×pad) / count`，
+按钮行必须包在 `Padding(horizontal: _pad)` 里，否则越靠右偏得越多。
 
-**对齐规则**：高亮宽度 `= (总宽 - 2×pad) / count`，
-所以按钮行必须包在 `Padding(horizontal: _pad)` 里，否则越靠右偏得越多。
+**切页**：点击用 `animateToPage`（280ms `easeOutCubic`）；
+**拖动必须 `jumpToPage`**（`animateToPage` 每跨一格起一段动画，叠加成幻灯片卡顿）。
 
-**内容结构**：
+### 8.8 PageShell / InstantPageRoute
 
-```dart
-LayoutBuilder(builder: (context, c) {
-  final itemWidth = (c.maxWidth - _pad * 2) / count;
-  return Stack(
-    clipBehavior: Clip.none,
-    children: [
-      AnimatedPositioned(            // 高亮胶囊
-        duration: 260ms,
-        left: _pad + itemWidth * index,
-        top: _pad, bottom: _pad, width: itemWidth,
-        child: AnimatedScale(
-          scale: _dragging ? 1.26 : 1.0,
-          duration: 180ms,
-          child: DecoratedBox(...),
-        ),
-      ),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: _pad),
-        child: Row(children: [ for (...) Expanded(按钮) ]),
-      ),
-    ],
-  );
-})
-```
-
-### 7.5 工具页模板组件
-
-`lib/widgets/tool_layout.dart` 里的四个：
-
-| 组件 | 规格 |
-|---|---|
-| `ToolCard` | 卡片容器，内部 `Column` + 16px padding |
-| `ToolField` | 带标签的输入框，用主题的 `inputDecorationTheme` |
-| `ToolPrimaryButton` | **全宽**、**纯文字**（不用 `.icon`，否则文字偏右） |
-| `ToolNotice` | 提示 / 错误行（图标 + 文字） |
-| `ToolSectionTitle` | 结果区小标题 |
-
-`ToolPrimaryButton` 的 loading 处理：
-
-```dart
-FilledButton(
-  // 不能设 null：禁用态文字只有 60% 不透明度，会看不清
-  onPressed: loading ? () {} : onPressed,
-  child: loading
-      ? Row(居中: [16×16 转圈, 8 间距, Text(loadingLabel)])
-      : Text(label),
-)
-```
-
-### 7.6 下拉刷新
-
-```dart
-RefreshIndicator(
-  color: tokens.accent,
-  backgroundColor:
-      isDark ? const Color(0xFF2A2F38) : Colors.white.withValues(alpha: 0.92),
-  strokeWidth: 2.2,
-  displacement: 32,
-  onRefresh: ...,
-  child: ...,
-)
-```
-
-### 7.7 结果列表
-
-工具页的逐条结果（Ping 的每一包、Traceroute 的每一跳）**必须包进 `ToolCard`**，
-不能裸排在页面上，否则和其他的卡片视觉割裂。
-
----
-
-## 8. 路由与转场
-
-### 8.1 InstantPageRoute
+- `PageShell`：透明 Scaffold + 透明 AppBar（返回图标 20、标题 19 bold、
+  `centerTitle: false`）+ `SafeArea(top: false)`
+- `InstantPageRoute`：`opaque: true` + `WallpaperPage` 铺底；
+  260ms 进 / 220ms 出，`easeOutCubic`；新页右侧滑入，旧页视差左移 22%
 
 ```dart
 class InstantPageRoute<T> extends PageRouteBuilder<T> {
-  InstantPageRoute({
-    required WidgetBuilder builder,
-    super.settings,
-    super.maintainState,
-    super.fullscreenDialog,
-  }) : super(
-          opaque: true,                              // 声明不透明
+  InstantPageRoute({required WidgetBuilder builder, super.settings,
+      super.maintainState, super.fullscreenDialog})
+      : super(
+          opaque: true,
           transitionDuration: const Duration(milliseconds: 260),
           reverseTransitionDuration: const Duration(milliseconds: 220),
-          pageBuilder: (context, a, b) =>
-              WallpaperPage(child: builder(context)),   // 自动包背景
+          pageBuilder: (context, a, b) => WallpaperPage(child: builder(context)),
           transitionsBuilder: (context, animation, secondary, child) {
-            final incoming = Tween<Offset>(begin: Offset(1, 0), end: Offset.zero)
+            final incoming = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
                 .chain(CurveTween(curve: Curves.easeOutCubic))
                 .animate(animation);
-            final outgoing = Tween<Offset>(begin: Offset.zero, end: Offset(-0.22, 0))
+            final outgoing = Tween<Offset>(begin: Offset.zero, end: const Offset(-0.22, 0))
                 .chain(CurveTween(curve: Curves.easeOutCubic))
                 .animate(secondary);
             return SlideTransition(
@@ -876,160 +688,310 @@ class InstantPageRoute<T> extends PageRouteBuilder<T> {
 }
 ```
 
-迁移成本：全项目 `MaterialPageRoute(` → `InstantPageRoute(`，`builder` 签名一致。
+### 8.9 ExpandableSection / CopyableText
 
-### 8.2 应用级结构
+- `ExpandableSection`：320ms `easeInOutCubic`；`SizeTransition` 高度 +
+  Fade（延迟 25%）+ 8px 上移；箭头 `AnimatedRotation(turns: expanded ? 0.5 : 0)` 200ms
+- `CopyableText`：替代 `SelectableText`（高频列表会抢滚动）；长按复制 + toast
+
+### 8.10 状态标签 / 内嵌块
+
+- 标签：强调色 14% 底 + 25% 描边 + 圆角 6 + 11px w600；
+  非玻璃主题为实色 accent 底 + `onAccentSoft` 文字
+- 内嵌块：`surfaceCardAlt` 22%（玻璃）/ 实色（MD3），圆角 12，**无描边**
+
+### 8.11 连接按钮（四态主开关）
+
+| 状态 | 表现 |
+|---|---|
+| 未连接 | accent 渐变圆 62 + play 图标 |
+| 连接中 | 圆收缩到 50 + 外圈自绘旋转弧（84° 主弧 + 20% 拖尾），1000ms/圈 |
+| 已连接 | success 渐变圆 62 + power + 呼吸光晕 2200ms + 外圈细环 76 |
+| 按需暂停 | warning 圆 + pause，静止 |
+
+外框 84；尺寸 `AnimatedContainer` 480ms `easeOutBack`；
+按下 0.90（110ms `easeOut`）→ 松手 `elasticOut` 420ms 回弹；
+图标 `AnimatedSwitcher` 320ms（Fade `easeOut`，Scale `elasticOut`）；
+连上瞬间 620ms 高光斜扫（白色渐变条裁进圆内）。
+
+### 8.12 搜索框 / 图标按钮
+
+- 搜索框：`textAlignVertical: center` + `isDense: true` +
+  `prefixIconConstraints: BoxConstraints(minWidth: 36)`，圆角 12~14
+- 图标按钮：玻璃主题统一 40×40 圆形白 8%/40% 底；
+  行内小按钮用 `BoxConstraints.tightFor(width: 28, height: 28)` 避免撑高行
+
+### 8.13 工具页模板（可选）
+
+| 组件 | 规格 |
+|---|---|
+| `ToolCard` | 卡片容器，内部 `Column` + 16 padding |
+| `ToolField` | 带标签输入框，走主题 `inputDecorationTheme` |
+| `ToolPrimaryButton` | 全宽、纯文字（不用 `.icon`，否则文字偏右） |
+| `ToolNotice` | 提示/错误行（图标 + 文字） |
+| `ToolSectionTitle` | 结果区小标题 |
+
+主按钮 loading 态：`onPressed` 不能设 null（禁用态文字只有 60% 不透明度），
+改为空回调 + 内容换成「16×16 转圈 + 8 间距 + 文案」。
+
+下拉刷新：
 
 ```dart
-class _QShellAppState extends State<QShellApp> with WidgetsBindingObserver {
-  @override
-  void didChangePlatformBrightness() {
-    if (mounted) setState(() {});   // 背景层在 MaterialApp 外，必须主动重建
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // 部分 ROM 不回调上面的方法，回前台补一次
-    if (state == AppLifecycleState.resumed && mounted) setState(() {});
-  }
-
-  Widget build(context) => AnimatedBuilder(
-    animation: Listenable.merge([widget.controller, widget.localeController]),
-    builder: (context, _) {
-      // MaterialApp 之外没有 MediaQuery，用 platformBrightness 推断
-      final platformDark = View.of(context).platformDispatcher
-          .platformBrightness == Brightness.dark;
-      final isDark = switch (widget.controller.themeMode) {
-        ThemeMode.dark => true,
-        ThemeMode.light => false,
-        ThemeMode.system => platformDark,
-      };
-      final theme = design.buildTheme(brightness: isDark, seed: seed);
-      final tokens = theme.extension<AppTokens>();
-
-      return ThemeScope(
-        controller: widget.controller,
-        child: LocaleScope(
-          child: AppStringsScope(
-            child: Directionality(          // ← MaterialApp 外必须有
-              textDirection: TextDirection.ltr,
-              child: Stack(children: [背景层, MaterialApp(...)]),
-            ),
-          ),
-        ),
-      );
-    },
-  );
-}
+RefreshIndicator(
+  color: tokens.accent,
+  backgroundColor: isDark ? const Color(0xFF2A2F38)
+      : Colors.white.withValues(alpha: 0.92),
+  strokeWidth: 2.2,
+  displacement: 32,
+  onRefresh: ...,
+  child: ...,
+)
 ```
+
+结果列表（Ping 每一包、Traceroute 每一跳）必须包进 `ToolCard`，不能裸排。
 
 ---
 
-## 9. 交互规范
+## 9. 浮层体系
+
+浮层 = `GlassSurface` 外壳 + 自定义动画。
+**不使用系统 SnackBar / AlertDialog / PopupMenu / Dropdown。**
+
+### 9.1 showGlassToast
+
+```dart
+showGlassToast(context, '文案', tone: GlassToastTone.success);
+```
+
+- 位置 `left/right 16`、`bottom 96 + safeArea`；圆角 12、模糊 16、
+  `opacity 0.38`、内边距 14
+- 260ms 上滑 35% + 淡入；停留 2s；点击立即关；同一时刻只留一条
+- tone：`info` / `success` / `error` 决定图标与颜色
+
+### 9.2 showGlassMenu
+
+```dart
+final value = await showGlassMenu<String>(
+  context: context,
+  anchorKey: _addButtonKey,      // 或 anchorRect: 点击位置
+  width: 200,
+  items: const [
+    GlassMenuItem(value: 'a', label: '订阅链接', icon: Icons.rss_feed_rounded),
+  ],
+);
+```
+
+- 锚点 `GlobalKey` 或 `Rect`；右对齐、贴边夹紧、空间不足翻到上方
+- 圆角 16、模糊 16、`opacity 0.36`、内边距 6；项高 44、圆角 10、按压 accent 12%
+- 190ms：scale `0.86 → 1`（`easeOutBack`），**缩放原点指向锚点中心**；
+  **不做淡入**（避免 BackdropFilter 失效）；收起 `easeOutCubic`
+- 支持 `icon / subtitle / selected`；选择器场景选中项右侧 ✓ + 文字 accent，
+  不要额外加圆点图标（圆点 + 勾重复）
+
+### 9.3 showGlassSheet
+
+- 悬浮式：左右 10、底部 `10 + 手势条 + 键盘`；四角圆角 24
+  （贴屏幕底会被屏幕物理圆角裁断描边）
+- 模糊 18、`opacity 0.46`、barrier `black 0.32`
+- 自绘拖拽条 36×4（`showDragHandle: false`）
+- 结构：标题 17 bold → 内容 `SingleChildScrollView` → 底部按钮行
+
+### 9.4 showGlassConfirm
+
+圆角 20、模糊 18、`opacity 0.46`、barrier `black 0.30`；
+标题 15.5 bold（危险操作 danger 色）+ 正文 13 + 等宽按钮；返回 `bool`。
+
+### 9.5 GlassSelectField
+
+点击弹出 `showGlassMenu`（宽度 = 锚点宽度），显示当前值 + `expand_more`；
+选中项右侧 ✓ + 文字 accent。
+
+---
+
+## 10. 动效规范
+
+| 场景 | 时长 | 曲线 |
+|---|---|---|
+| 页面转场（进/出） | 260 / 220ms | `easeOutCubic` |
+| 底栏点击切页 / 拖动 | 280ms / `jumpToPage` | `easeOutCubic` / — |
+| 折叠卡片 | 320ms | `easeInOutCubic` + fade 延迟 25% |
+| 开关轨道 / 按下 | 220 / 120ms | 默认 |
+| 菜单弹出 / 收起 | 190ms | `easeOutBack` / `easeOutCubic` |
+| toast 进出 | 260ms | `easeOutCubic` / `easeInCubic` |
+| 底栏选中 / 文字 / 按压 | 260 / 220 / 180ms | 默认 |
+| 连接按钮尺寸 / 回弹 / 高光 | 480 / 420 / 620ms | `easeOutBack` / `elasticOut` / 线性 |
+| 呼吸光晕 | 2200ms 往复 | 线性 |
+| 状态点呼吸 | 1600ms 循环 | 线性 |
+| 图标替换 | 280~320ms | Fade `easeOut` + Scale 0.7→1（`easeOutBack`） |
+
+**硬性规则**
+
+1. `FadeTransition.opacity` 只能接 `[0,1]` 曲线，**禁止 `easeOutBack` / `elasticOut`**
+   （越界断言红块，报错指向 `curves.dart`，很难定位）。
+2. 过冲曲线只能给 `scale` / `offset`。
+3. `reverseCurve` 用 easeOut 系（先快后慢）；用 easeIn 会"先慢慢动、最后一帧突然跳完"。
+4. 状态切换一定要有过渡：`Icon(cond ? A : B)` 是瞬间替换，必须 `AnimatedSwitcher`。
+
+---
+
+## 11. 交互规范
 
 | 交互 | 行为 | 参数 |
 |---|---|---|
 | 切换设计语言 | 瞬时，无渐变 | `themeAnimationDuration: Duration.zero` |
-| 页面 push/back | 新页右侧滑入，旧页左移视差 | 260ms / 220ms，视差 22% |
-| 底栏点击 | `animateToPage` 平滑切页 | 280ms `easeOutCubic` |
-| 底栏拖动 | **水平拖动**（非长按），跟手切页 | `jumpToPage`（瞬时） |
-| 底栏拖动高亮 | 放大到 1.26 倍并溢出 | `AnimatedScale` 180ms |
-| 长按列表项 | 弹出操作菜单 | 系统默认 |
-| 返回键 | 不在首页 → 回首页；在首页 → 提示「再按一次退出」 | SnackBar |
+| 页面 push/back | 新页右侧滑入，旧页视差 | 260 / 220ms，22% |
+| 底栏点击 | `animateToPage` | 280ms `easeOutCubic` |
+| 底栏拖动 | 水平拖动跟手 | `jumpToPage`（瞬时） |
+| 底栏拖动高亮 | 放大 1.26 倍并溢出 | `AnimatedScale` 180ms |
+| 列表按压 | accent 12%（按下）/ 6%（hover） | 圆角 10，左右内缩 2px |
+| 卡片内按压 | `InkWell.borderRadius` = 卡片圆角（16） | — |
+| 返回键 | 不在首页 → 回首页；首页 → 再按一次退出 | toast |
+| 危险操作 | `showGlassConfirm(danger: true)` | — |
 
-**拖动必须用 `jumpToPage`**：`animateToPage` 会在拖动每跨一格时起一段 280ms 动画，
-叠加起来就是幻灯片级别的卡顿。
+**列表禁止 `Divider`**：分割线 + 满宽灰块叠在一起，边界全是直角，会显脏。
+
+**运行中状态变化**（连接 / 断开 / 切节点 / 暂停）**不弹提示**，
+由按钮、徽章、通知栏表达；只有失败、需用户操作、下载结果才弹 toast。
+
+每秒刷新的数字用等宽数字 + `FittedBox(scaleDown)`，禁止换行。
 
 ---
 
-## 10. 已知限制
+## 12. 已知限制与陷阱
 
-### 10.1 弹层无法真实模糊
+### 12.1 弹层模糊的边界
 
-`showModalBottomSheet` 是独立路由，Flutter 在它和下层之间插入 `RepaintBoundary`，
-`BackdropFilter` 跨不过 route 边界，模糊完全不生效。
+- `showModalBottomSheet` 在部分 Flutter 版本中跨 route 的 `RepaintBoundary`
+  会让 `BackdropFilter` 失效（QShell 时期的结论）；
+- QClash 当前版本实测**底部弹窗内 BackdropFilter 生效**（barrier 调浅后可见）；
+- 若要绝对可控，改用 `OverlayEntry` 自绘（菜单 / toast 就是这么做的），
+  代价是滑入动画、遮罩点击、下滑拖拽、返回键拦截都要自己写（约 200~300 行）；
+- **无论哪种实现，`Opacity` 包住 `BackdropFilter` 都会让模糊失效。**
 
-实测三版：
+### 12.2 卡片不能做背景模糊
 
-| 方案 | 结果 |
-|---|---|
-| 半透明 + BackdropFilter | 模糊不生效 |
-| 半透明无模糊（alpha 0.97） | 下层文字透上来，发脏 |
-| 不透明 + 描边（当前方案） | 干净，无透视 |
+滚动容器内 `BackdropFilter` 会随内容平移失效；卡片改用静态玻璃（见 8.1）。
 
-真模糊只能改用 `OverlayEntry` 自绘（滑入动画、遮罩点击、下滑拖拽、返回键拦截，
-约 200~300 行），收益与成本不成正比，**当前不采用**。
-
-### 10.2 卡片不能做背景模糊
-
-滚动容器内 `BackdropFilter` 会随内容平移失效。卡片改用静态玻璃质感（见 7.1）。
-
-### 10.3 转场与透明页面的冲突
+### 12.3 转场与透明页面
 
 页面若透明，转场时新旧两页同屏 → 内容重影。
-解法：push 页面用 `WallpaperPage` 自带不透明背景（见 6.5）。
+解法：push 页面用 `WallpaperPage` 自带不透明背景（见 7.4）。
 
-### 10.4 RepaintBoundary 破坏 backdrop
+### 12.4 RepaintBoundary 破坏 backdrop
 
 `PageView` 的 children 不要包 `RepaintBoundary`，否则页面被隔离成独立图层，
 `BackdropFilter` 采样不到背景。
 
-### 10.5 ImageFilter.shader 不可用
+### 12.5 ImageFilter.shader 不可用
 
-`shaders/liquid_glass.frag` 保留在仓库里但**未启用**：部分机型上
-`ImageFilter.shader` 的背景采样返回白色，玻璃变成奶白块。
-Impeller 修复后可重新启用。
+`shaders/liquid_glass.frag` 保留但**未启用**：部分机型上 `ImageFilter.shader`
+的背景采样返回白色，玻璃变成奶白块。Impeller 修复后可再启用。
 
-### 10.6 系统日夜切换需要主动重建
+### 12.6 系统日夜切换需要主动重建
 
-背景层在 `MaterialApp` 之外，`MaterialApp` 的 `themeMode: system` 会自动跟随，
-但背景层不会——必须用 `WidgetsBindingObserver` 在亮度变化时 `setState`。
+背景层在 `MaterialApp` 之外，`themeMode: system` 只让 `MaterialApp` 跟随，
+背景层不会。必须用 `WidgetsBindingObserver`：
+
+```dart
+@override
+void didChangePlatformBrightness() {
+  if (mounted) setState(() {});   // 背景层在 MaterialApp 外，必须主动重建
+}
+
+@override
+void didChangeAppLifecycleState(AppLifecycleState state) {
+  // 部分 ROM 不回调上面的方法，回前台补一次
+  if (state == AppLifecycleState.resumed && mounted) setState(() {});
+}
+```
+
 否则会出现「主页还是日间、二级页面已是夜间」。
+
+### 12.7 输入框与表单（4 条）
+
+| # | 陷阱 | 修法 |
+|---|---|---|
+| 1 | 主题 `filled: true` 在自定义淡底里叠出直角灰罩 | 该 `InputDecoration` 显式 `filled: false` |
+| 2 | `border: InputBorder.none` 关不掉边框 | `border` / `enabledBorder` / `focusedBorder` 三处同时设 |
+| 3 | 固定高容器里文字偏上 | `textAlignVertical: center` + `isDense: true` + `prefixIconConstraints` |
+| 4 | `AlertDialog` 宽度由 `IntrinsicWidth` 决定 | 改 `showGlassSheet` / `showGlassConfirm` |
+
+### 12.8 其他陷阱总表
+
+| # | 陷阱 | 现象 | 修法 |
+|---|---|---|---|
+| 1 | `IconButton` 默认 48 点击区 | 行高被撑到 50+ | `BoxConstraints.tightFor(28, 28)` + `padding: zero` |
+| 2 | 固定宽度底栏 | 宽屏上歪 | 左右各 16 撑满 |
+| 3 | `SelectableText` 高频列表 | 抢滚动、清空选区 | `CopyableText` |
+| 4 | 每秒 `notifyListeners` | 后台 Tab 全重建 | 仅当前 Tab 可见时广播 |
+| 5 | 拖拽条叠两条 | 顶部双重手柄 | 显式 `showDragHandle: false` + 自绘 |
+| 6 | 4 段以上分段按钮长文案 | 文字折两行 | 缩 2 字 + `softWrap: false` |
+| 7 | 弹层半透明无模糊 | 下层文字透上来 | 必须 `BackdropFilter`；非玻璃回实色 |
+| 8 | 弹层贴屏幕底 | 左右描边被屏幕圆角裁断 | 悬浮式：四周留 10dp、底部让出手势条 |
+| 9 | `Opacity` 包住 `BackdropFilter` | 毛玻璃延迟出现 | 模糊子树只做 scale/位移 |
+| 10 | 卡片里用 `BackdropFilter` | 滚动时闪烁/失效 | 卡片用半透明 + 渐变模拟 |
+| 11 | 多套圆角（16/20/22） | 视觉不统一 | 统一 `AppTokens.cardRadius` |
+| 12 | barrier 太黑（0.5+） | 模糊后发灰 | 0.30~0.32 |
+| 13 | 深色卡片配黑描边 | 边界消失 | 描边与背景反色 |
+| 14 | 没有背景光斑 | 卡片是灰板 | 必须有 `GlassBackdrop` |
+| 15 | `easeOutBack` 给 opacity | 断言红块 | 见 10 节规则 1 |
+| 16 | 玻璃标签用实心 accent | 像塑料片 | 同色文字 + 14% 底 |
 
 ---
 
-## 11. 迁移模板
+## 13. 迁移与落地
 
-### 11.1 最小文件集
+### 13.1 最小文件集
 
 ```
-design/
+lib/design/
+├── tokens.dart
 ├── design_system.dart
 ├── design_switcher.dart
-├── tokens.dart
 ├── md3_design_system.dart
 ├── glass_design_system.dart
 ├── glass_card.dart
 ├── glass_edge_painter.dart
-├── liquid_glass.dart
+├── glass_surface.dart
+├── glass_switch.dart
+├── glass_slider.dart
+├── segment_style.dart
+├── bottom_nav_bar.dart
+├── page_shell.dart
 ├── wallpaper_page.dart
-└── instant_route.dart
-state/
+├── instant_route.dart
+├── expandable_section.dart
+├── copyable_text.dart
+├── glass_sheet.dart
+├── glass_menu.dart
+├── glass_dialog.dart
+├── glass_toast.dart
+└── glass_select.dart
+lib/state/
 ├── theme_controller.dart
 └── theme_scope.dart
 ```
 
-### 11.2 接入步骤
+### 13.2 接入步骤
 
 1. 复制上面两组文件
 2. `main.dart` 改成 `Directionality > Stack[背景层, MaterialApp]`
-3. 主题统一走 `DesignLanguage.resolve(...).buildTheme(...)`，
-   把原来手写的 `ColorScheme.fromSeed`、`appBarTheme` 搬进对应 DesignSystem
-4. 若项目已有自己的外观设置（高亮色/壁纸/明暗），让 `ThemeController`
-   **委托读取**而不是各存一份，避免两个来源打架
-5. `MaterialPageRoute` → `InstantPageRoute`（全项目替换）
+3. 主题统一走 `DesignLanguage.resolve(...).buildTheme(...)`；
+   把原来手写的 `ColorScheme.fromSeed`、`appBarTheme` 搬进 DesignSystem
+4. 已有外观设置的项目：让 `ThemeController` **委托读取**而不是各存一份，避免两个来源打架
+5. `MaterialPageRoute` → `InstantPageRoute`（全项目替换，`builder` 签名一致）
 6. `Card` → `GlassCard`（非玻璃主题下自动退化为 `Card`）
 7. 自定义 AppBar 里按 `tokens.glass` 分支
 8. Android `windowBackground` 对齐主题底色，关闭预测返回
 
-### 11.3 Android 侧配置
+### 13.3 Android 侧配置
 
 ```xml
 <!-- values/styles.xml -->
 <item name="android:windowBackground">#FFE6EAF2</item>
 
 <!-- values-night/styles.xml -->
-<item name="android:windowBackground">#FF0A0D12</item>
+<item name="android:windowBackground">#FF12161D</item>
 ```
 
 ```xml
@@ -1037,41 +999,77 @@ state/
 <application android:enableOnBackInvokedCallback="false" ...>
 ```
 
+### 13.4 验收清单
+
+- [ ] 所有页面 Scaffold 透明，根层有背景（光斑或壁纸）
+- [ ] push 页面一律 `InstantPageRoute`
+- [ ] 卡片 `GlassCard`，InkWell 圆角 = `cardRadius`
+- [ ] 浮层只用 `showGlassToast / showGlassMenu / showGlassSheet / showGlassConfirm`
+- [ ] 选择器用 `GlassSelectField`，开关/滑块用自绘版本
+- [ ] 列表无分割线，按压 accent 12%
+- [ ] 弹层四周留白、barrier ≤ 0.32
+- [ ] 带 BackdropFilter 的子树没有 Opacity/Fade
+- [ ] 按第 12 节逐条自查
+
 ---
 
-## 12. 调参速查
+## 14. 调参速查
 
 ### 想更透
 
 | 位置 | 参数 | 当前值 | 方向 |
 |---|---|---|---|
 | `glass_card.dart` | 卡片底色 | 0.40 / 0.075 | 调小 |
-| `bottom_nav_bar.dart` | 底盘底色 | 0.14 / 0.16 | 调小 |
+| `bottom_nav_bar.dart` | 底盘 | 0.14 / 0.16 | 调小 |
 | `liquid_glass.dart` | `tint` | 0.06 | 调小到 0 |
+| 浮层 | `GlassSurface.opacity` | 0.36 ~ 0.56 | 调小（0.30 起） |
+| 浮层 | `GlassSurface.blur` | 16 ~ 24 | 调小（12 起），越低越像液态玻璃 |
 | 设置页 | 壁纸压暗 | 0.35 | 调小 |
 
 ### 想更有厚度
 
 | 位置 | 参数 | 当前值 |
 |---|---|---|
-| `glass_edge_painter.dart` | 各层 alpha | 见 7.2 |
+| `glass_edge_painter.dart` | 各层 alpha | 见 8.2 |
 | `glass_card.dart` | 渐变 stops | 0 / 0.48 / 1 |
-| `liquid_glass.dart` | `depth` | 0.18 |
+| `liquid_glass.dart` | `depth` | 0.16 |
 
 ### 性能
 
-- 玻璃卡片数量多会掉帧：设置里给了「卡片折射」开关，默认关
-- 静态玻璃卡片几乎无额外开销
-- 真实模糊只用在一处（底栏）
+- 玻璃卡片数量多会掉帧：设置里给了「卡片折射 / 全量玻璃」开关
+- 静态玻璃卡片几乎无额外开销（无 BackdropFilter）
+- 真实模糊只用于底栏与浮层
+
+### 其他
+
+| 想要 | 改哪里 |
+|---|---|
+| 卡片圆角 | `AppTokens.cardRadius` |
+| 光斑强度 | `GlassBackdrop` 的 0.68 / 0.58 |
+| 选中亮度差 | `segment_style.dart` 的 0.22 / 0.04 |
+| 内嵌块淡不淡 | `surfaceCardAlt.withValues(alpha: 0.22)` |
+| 底栏高/圆角/模糊 | `bottom_nav_bar.dart` 的 66 / 22 / 16 |
+| 菜单动画 | `glass_menu.dart` 的 190ms / 0.86 / `easeOutBack` |
+| toast 停留/位置 | `glass_toast.dart` 的 2s / `bottom 96` |
+| 连接按钮 | `_ConnectButton` 的 62 / 50 / 84 / 480ms |
+| 页面转场 | `instant_route.dart` 的 260 / 220 / 0.22 |
 
 ---
 
-## 13. 变更记录
+## 15. 变更记录
 
 | 版本 | 外观相关变更 |
 |---|---|
-| `+1` | MD3 基底、可切换设计语言骨架 |
-| `+3` | 液态玻璃第一版：光斑、半透明卡片、模糊底栏 |
-| `+4` | 玻璃细节打磨：透明度、描边、图标按钮、搜索框、下拉刷新、卡片折射开关 |
-| `+5` | 修主按钮 loading 态、MD3 下误显示玻璃开关、结果列表裸排 |
-| 未发版 | 二级页面背景改回光斑、系统日夜切换跟随、弹层方案回滚 |
+| QShell `+1` | MD3 基底、可切换设计语言骨架 |
+| QShell `+3` | 液态玻璃第一版：光斑、半透明卡片、模糊底栏 |
+| QShell `+4` | 玻璃细节打磨：透明度、描边、图标按钮、搜索框、下拉刷新、卡片折射开关 |
+| QShell `+5` | 主按钮 loading 态、MD3 下误显示玻璃开关、结果列表裸排 |
+| QShell 未发版 | 二级页面背景改回光斑、系统日夜切换跟随、弹层方案回滚 |
+| 2026-11-04 | 三级层级、选中态透光、GlassSwitch、GlassSheet、列表按压与动效、输入框陷阱 |
+| 2026-11-05 | 节点面板折叠动画；浮层玻璃化（菜单/确认框/选择器/底部弹窗） |
+| 2026-11-06 | 抽出 `GlassSurface`（模糊 + 厚度边 + 顶部高光）；浮层统一并调浅 barrier；菜单缩放弹出与收起曲线；四态连接按钮；玻璃 toast；Tooltip 玻璃化；本文件合并重写 |
+
+---
+
+> 本文档已合并原 `DESIGN-SYSTEM.legacy.md`（QShell 时期）的全部有效内容，
+> 旧文件不再保留。后续改动请直接更新本文件。

@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../design/glass_toast.dart';
 import '../../design/instant_route.dart';
 import '../../design/glass_card.dart';
 import 'dart:convert';
@@ -506,11 +507,7 @@ class _TerminalPageState extends State<TerminalPage> {
   }
 
   void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
-      );
+    showGlassToast(context, message);
   }
 
   @override

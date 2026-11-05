@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../design/glass_toast.dart';
+import '../../design/glass_dialog.dart';
+import '../../design/glass_sheet.dart';
+import '../../design/glass_input_dialog.dart';
 import '../../design/glass_card.dart';
 import 'package:flutter/services.dart';
 
@@ -41,9 +45,7 @@ class _MemoPageState extends State<MemoPage> {
       await _store.saveMemos(groups);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text('保存失败：$e')));
+        showGlassToast(context, '保存失败：$e', tone: GlassToastTone.error);
       return;
     }
     if (!mounted) return;
@@ -85,24 +87,14 @@ class _MemoPageState extends State<MemoPage> {
 
   Future<void> _deleteGroup(int groupIndex) async {
     final group = _groups[groupIndex];
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('删除分组'),
-        content: Text(
+    final ok = await showGlassConfirm(
+      context,
+      title: '删除分组',
+      message:
           '「${group.group}」及其中的 ${group.items.length} 条命令将被删除，确定？',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(AppStrings.of(context).commonCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(AppStrings.of(context).commonDelete),
-          ),
-        ],
-      ),
+      confirmText: AppStrings.of(context).commonDelete,
+      cancelText: AppStrings.of(context).commonCancel,
+      danger: true,
     );
     if (ok != true || !mounted) return;
     final groups = List<QShellMemoGroup>.of(_groups)..removeAt(groupIndex);
@@ -156,44 +148,29 @@ class _MemoPageState extends State<MemoPage> {
     required String title,
     required String label,
     required String initial,
-  }) async {
-    final controller = TextEditingController(text: initial);
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(labelText: label),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(AppStrings.of(context).commonCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: Text(AppStrings.of(context).commonSave),
-          ),
-        ],
-      ),
+  }) {
+    return showGlassInput(
+      context,
+      title: title,
+      label: label,
+      initial: initial,
+      confirmText: AppStrings.of(context).commonSave,
+      cancelText: AppStrings.of(context).commonCancel,
     );
-    controller.dispose();
-    return result;
   }
 
   void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      showGlassToast(context, message);
   }
 
   Future<void> _add({String? groupName}) async {
-    final result = await showDialog<_MemoDraft>(
-      context: context,
-      builder: (_) => _MemoDialog(
+    final result = await showGlassSheet<_MemoDraft>(
+      context,
+      title: AppStrings.of(context).memoAddItem,
+      builder: (context, close) => _MemoDialog(
         groups: _groups.map((group) => group.group).toList(),
+        onCancel: () => close(null),
+        onDone: close,
       ),
     );
     if (result == null || !mounted) return;
@@ -213,13 +190,16 @@ class _MemoPageState extends State<MemoPage> {
 
   Future<void> _edit(int groupIndex, int itemIndex) async {
     final current = _groups[groupIndex].items[itemIndex];
-    final result = await showDialog<_MemoDraft>(
-      context: context,
-      builder: (_) => _MemoDialog(
+    final result = await showGlassSheet<_MemoDraft>(
+      context,
+      title: AppStrings.of(context).memoEditItem,
+      builder: (context, close) => _MemoDialog(
         groups: _groups.map((group) => group.group).toList(),
         initialGroup: _groups[groupIndex].group,
         initialName: current.name,
         initialCmd: current.cmd,
+        onCancel: () => close(null),
+        onDone: close,
       ),
     );
     if (result == null || !mounted) return;
@@ -265,9 +245,8 @@ class _MemoPageState extends State<MemoPage> {
   Future<void> _copy(String cmd) async {
     await Clipboard.setData(ClipboardData(text: cmd));
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(AppStrings.of(context).memoCopied)));
+      showGlassToast(context, AppStrings.of(context).memoCopied,
+          tone: GlassToastTone.success);
   }
 
   void _showActions(int groupIndex, int itemIndex) {
@@ -519,12 +498,16 @@ class _MemoDialog extends StatefulWidget {
     this.initialGroup,
     this.initialName,
     this.initialCmd,
+    required this.onCancel,
+    required this.onDone,
   });
 
   final List<String> groups;
   final String? initialGroup;
   final String? initialName;
   final String? initialCmd;
+  final VoidCallback onCancel;
+  final void Function(_MemoDraft draft) onDone;
 
   @override
   State<_MemoDialog> createState() => _MemoDialogState();
@@ -571,61 +554,75 @@ class _MemoDialogState extends State<_MemoDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.initialCmd == null ? AppStrings.of(context).memoAddItem : AppStrings.of(context).memoEditItem),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    final strings = AppStrings.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _nameCtrl,
+          decoration: InputDecoration(
+            labelText: strings.commonName,
+            isDense: true,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _cmdCtrl,
+          maxLines: 4,
+          minLines: 2,
+          style: const TextStyle(fontFamily: 'monospace'),
+          decoration: InputDecoration(
+            labelText: strings.commonCommand,
+            isDense: true,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _groupCtrl,
+          decoration: InputDecoration(
+            labelText: strings.commonGroup,
+            hintText: widget.groups.isEmpty
+                ? '常用'
+                : widget.groups.join(' / '),
+            isDense: true,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              _error!,
+              style: const TextStyle(fontSize: 12, color: Colors.red),
+            ),
+          ),
+        const SizedBox(height: 16),
+        Row(
           children: [
-            TextField(
-              controller: _nameCtrl,
-              decoration: InputDecoration(
-                labelText: AppStrings.of(context).commonName,
-                isDense: true,
-                border: OutlineInputBorder(),
+            Expanded(
+              child: OutlinedButton(
+                onPressed: widget.onCancel,
+                child: Text(strings.commonCancel),
               ),
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _cmdCtrl,
-              maxLines: 4,
-              minLines: 2,
-              style: const TextStyle(fontFamily: 'monospace'),
-              decoration: InputDecoration(
-                labelText: AppStrings.of(context).commonCommand,
-                isDense: true,
-                border: OutlineInputBorder(),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton(
+                onPressed: _submit,
+                child: const Text('保存'),
               ),
             ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _groupCtrl,
-              decoration: InputDecoration(
-                labelText: AppStrings.of(context).commonGroup,
-                hintText: widget.groups.isEmpty
-                    ? '常用'
-                    : widget.groups.join(' / '),
-                isDense: true,
-                border: const OutlineInputBorder(),
-              ),
-            ),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  _error!,
-                  style: const TextStyle(fontSize: 12, color: Colors.red),
-                ),
-              ),
           ],
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(AppStrings.of(context).commonCancel),
-        ),
-        FilledButton(onPressed: _submit, child: const Text('保存')),
       ],
     );
   }

@@ -1,4 +1,6 @@
 import 'dart:convert';
+import '../../design/glass_dialog.dart';
+import '../../design/glass_toast.dart';
 import '../../design/glass_card.dart';
 import 'dart:typed_data';
 
@@ -214,25 +216,13 @@ class _BackupPageState extends State<BackupPage> {
         .backupRestoreConfirmTemplate
         .replaceAll('{name}', entry.name);
 
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(AppStrings.of(context).backupRestoreTitle),
-        content: Text(
-          '$confirmText\n\n'
+    final ok = await showGlassConfirm(
+      context,
+      title: AppStrings.of(context).backupRestoreTitle,
+      message: '$confirmText\n\n'
           '当前 $hostCount 个连接、$memoCount 条备忘录将被替换。',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(AppStrings.of(context).commonCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(AppStrings.of(context).backupRestoreBtn),
-          ),
-        ],
-      ),
+      confirmText: AppStrings.of(context).backupRestoreBtn,
+      cancelText: AppStrings.of(context).commonCancel,
     );
     if (ok != true || !mounted) return;
 
@@ -299,9 +289,7 @@ class _BackupPageState extends State<BackupPage> {
   }
 
   void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showGlassToast(context, message);
   }
 
   String _fmtSize(int bytes) {

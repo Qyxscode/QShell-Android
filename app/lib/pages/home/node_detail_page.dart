@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../design/glass_toast.dart';
 import '../../design/instant_route.dart';
 import '../../design/glass_card.dart';
 import 'package:flutter/services.dart';
@@ -59,9 +60,7 @@ class _NodeDetailPageState extends State<NodeDetailPage> {
     final ip = widget.ip;
     if (ip == null || ip.isEmpty) return;
     Clipboard.setData(ClipboardData(text: ip));
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(AppStrings.of(context).nodeCopiedTemplate.replaceAll('{ip}', ip))));
+    showGlassToast(context, AppStrings.of(context).nodeCopiedTemplate.replaceAll('{ip}', ip));
   }
 
   bool get _isGateway => widget.kind == 'gateway';

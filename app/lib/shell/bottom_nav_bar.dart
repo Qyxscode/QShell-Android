@@ -129,7 +129,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
                                 i == widget.index
                                     ? widget.iconsFilled[i]
                                     : widget.iconsOutlined[i],
-                                size: 24,
+                                size: 20,
                                 color: i == widget.index
                                     ? (tokens.glass
                                         ? tokens.accent
@@ -141,9 +141,9 @@ class _BottomNavBarState extends State<BottomNavBar> {
                             AnimatedDefaultTextStyle(
                               duration: const Duration(milliseconds: 220),
                               style: (text.labelSmall ??
-                                      const TextStyle(fontSize: 10))
+                                      const TextStyle(fontSize: 10.5))
                                   .copyWith(
-                                fontSize: 10,
+                                fontSize: 10.5,
                                 color: i == widget.index
                                     ? (tokens.glass
                                         ? tokens.accent
@@ -229,7 +229,7 @@ class _BottomNavBarState extends State<BottomNavBar> {
                       ),
                     )
                   : BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: (isDark ? Colors.black : Colors.white)

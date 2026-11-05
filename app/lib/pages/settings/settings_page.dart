@@ -1,4 +1,6 @@
 import 'dart:convert';
+import '../../design/glass_dialog.dart';
+import '../../design/glass_toast.dart';
 import '../../design/instant_route.dart';
 import '../../design/glass_card.dart';
 import 'dart:io';
@@ -159,24 +161,20 @@ class _SettingsPageState extends State<SettingsPage> {
       final picked = await FilePicker.pickFile();
       if (picked == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(const SnackBar(content: Text('未选择文件')));
+        showGlassToast(context, '未选择文件');
         return;
       }
       final bytes = await picked.readAsBytes();
       await widget.controller.setWallpaperBytes(bytes);
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(content: Text('壁纸已设置（${(bytes.length / 1024).round()} KB）')),
-        );
+      showGlassToast(
+        context,
+        '壁纸已设置（${(bytes.length / 1024).round()} KB）',
+        tone: GlassToastTone.success,
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text('选择壁纸失败：$e')));
+      showGlassToast(context, '选择壁纸失败：$e', tone: GlassToastTone.error);
     }
   }
 
@@ -311,35 +309,16 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _showUpdateDialog(ReleaseInfo release) async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          AppStrings.of(context)
-              .updateAvailableTemplate
-              .replaceAll('{v}', release.version),
-        ),
-        content: SingleChildScrollView(
-          child: Text(
-            release.notes.isEmpty ? release.name : release.notes,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(AppStrings.of(context).commonCancel),
-          ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _openReleasePage(release);
-            },
-            child: Text(AppStrings.of(context).checkUpdate),
-          ),
-        ],
-      ),
+    final go = await showGlassConfirm(
+      context,
+      title: AppStrings.of(context)
+          .updateAvailableTemplate
+          .replaceAll('{v}', release.version),
+      message: release.notes.isEmpty ? release.name : release.notes,
+      confirmText: AppStrings.of(context).checkUpdate,
+      cancelText: AppStrings.of(context).commonCancel,
     );
+    if (go) await _openReleasePage(release);
   }
 
   Future<void> _openReleasePage(ReleaseInfo release) async {
@@ -350,29 +329,18 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (_) {
       await Clipboard.setData(ClipboardData(text: url));
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..clearSnackBars()
-        ..showSnackBar(SnackBar(content: Text(url)));
+      showGlassToast(context, url);
     }
   }
 
   Future<void> _clearData() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(AppStrings.of(context).clearData),
-        content: Text(AppStrings.of(context).clearDataDesc),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(AppStrings.of(context).commonCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(AppStrings.of(context).commonConfirm),
-          ),
-        ],
-      ),
+    final ok = await showGlassConfirm(
+      context,
+      title: AppStrings.of(context).clearData,
+      message: AppStrings.of(context).clearDataDesc,
+      confirmText: AppStrings.of(context).commonConfirm,
+      cancelText: AppStrings.of(context).commonCancel,
+      danger: true,
     );
     if (ok != true) return;
     final prefs = await SharedPreferences.getInstance();
@@ -385,9 +353,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showGlassToast(context, message);
   }
 
   @override

@@ -27,7 +27,7 @@ class ThemeController extends ChangeNotifier {
 
   DesignLanguage _designLanguage = DesignLanguage.md3;
   bool _glassRefraction = false;
-  bool _glassAllCards = false;
+  bool _glassAllCards = true;
   String? _wallpaper;
   double _wallpaperDim = 0.35;
   ThemeModeChoice _modeChoice = ThemeModeChoice.system;
@@ -119,7 +119,7 @@ class ThemeController extends ChangeNotifier {
     _designLanguage = DesignLanguage.values[
         (prefs.getInt(_kDesign) ?? 0).clamp(0, DesignLanguage.values.length - 1)];
     _glassRefraction = prefs.getBool(_kGlassRefraction) ?? false;
-    _glassAllCards = prefs.getBool(_kGlassAllCards) ?? false;
+    _glassAllCards = prefs.getBool(_kGlassAllCards) ?? true;
     _wallpaper = prefs.getString(_kWallpaper);
     _wallpaperDim = prefs.getDouble(_kWallpaperDim) ?? 0.35;
     _terminalFontSize = (prefs.getDouble(_kTerminalFontSize) ?? 13)

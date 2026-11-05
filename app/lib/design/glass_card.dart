@@ -19,7 +19,7 @@ class GlassCard extends StatelessWidget {
     this.color,
     this.shape,
     this.clipBehavior = Clip.antiAlias,
-    this.borderRadius = const BorderRadius.all(Radius.circular(20)),
+    this.borderRadius = const BorderRadius.all(Radius.circular(16)),
   });
 
   final Widget child;

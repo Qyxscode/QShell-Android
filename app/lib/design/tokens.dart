@@ -51,6 +51,12 @@ class AppTokens extends ThemeExtension<AppTokens> {
   /// 是否玻璃质感主题（卡片半透明 + 背景装饰 + 底栏模糊）
   final bool glass;
 
+  /// 卡片圆角全局唯一来源（规范：所有卡片统一 16）
+  static const double cardRadius = 16;
+
+  /// 弹层实色底：surfaceCardAlt 去掉透明度（浮层兜底用）
+  Color get surfaceFloating => surfaceCardAlt.withValues(alpha: 1.0);
+
   @override
   AppTokens copyWith({
     Color? background,

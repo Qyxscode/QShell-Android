@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../design/glass_dialog.dart';
+import '../../design/glass_toast.dart';
 import '../../design/instant_route.dart';
 import '../../design/glass_card.dart';
 
@@ -114,22 +116,15 @@ class _FilesPageState extends State<FilesPage> {
   }
 
   Future<void> _removeServer(RemoteServer server) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(AppStrings.of(context).filesDeleteServerTitle),
-        content: Text(AppStrings.of(context).filesDeleteServerConfirmTemplate.replaceAll('{name}', server.name)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(AppStrings.of(context).commonCancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(AppStrings.of(context).commonDelete),
-          ),
-        ],
-      ),
+    final ok = await showGlassConfirm(
+      context,
+      title: AppStrings.of(context).filesDeleteServerTitle,
+      message: AppStrings.of(context)
+          .filesDeleteServerConfirmTemplate
+          .replaceAll('{name}', server.name),
+      confirmText: AppStrings.of(context).commonDelete,
+      cancelText: AppStrings.of(context).commonCancel,
+      danger: true,
     );
     if (ok != true) return;
     final servers = await _remoteStore.remove(server);
@@ -169,9 +164,7 @@ class _FilesPageState extends State<FilesPage> {
   }
 
   void _toast(String message) {
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showGlassToast(context, message);
   }
 
   List<RemoteServer> _byKind(String kind) =>
