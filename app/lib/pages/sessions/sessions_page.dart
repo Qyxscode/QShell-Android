@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../../design/glass_sheet.dart';
 import '../../design/glass_dialog.dart';
 import '../../design/glass_toast.dart';
 import '../../design/instant_route.dart';
@@ -199,11 +200,11 @@ class _SessionsPageState extends State<SessionsPage> {
   }
 
   Future<void> _addHost() async {
-    final host = await showModalBottomSheet<QShellHost>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) => Padding(
+    final host = await showGlassSheet<QShellHost>(
+      context,
+      title: '',
+      showHeader: false,
+      builder: (context, close) => Padding(
         // 键盘弹起时把表单整体顶上去，避免输入框被挡住
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -219,11 +220,11 @@ class _SessionsPageState extends State<SessionsPage> {
   }
 
   Future<void> _editHost(QShellHost original) async {
-    final host = await showModalBottomSheet<QShellHost>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) => Padding(
+    final host = await showGlassSheet<QShellHost>(
+      context,
+      title: '',
+      showHeader: false,
+      builder: (context, close) => Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
@@ -238,10 +239,11 @@ class _SessionsPageState extends State<SessionsPage> {
   }
 
   Future<void> _showHostActions(QShellHost host) async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
+    final action = await showGlassSheet<String>(
+      context,
+      title: '',
+      showHeader: false,
+      builder: (context, close) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -249,12 +251,12 @@ class _SessionsPageState extends State<SessionsPage> {
               leading: const Icon(Icons.edit_outlined),
               title: Text(AppStrings.of(context).commonEdit),
               subtitle: Text(host.subtitle),
-              onTap: () => Navigator.pop(context, 'edit'),
+              onTap: () => close('edit'),
             ),
             ListTile(
               leading: const Icon(Icons.delete_outline_rounded),
               title: Text(AppStrings.of(context).commonDelete),
-              onTap: () => Navigator.pop(context, 'delete'),
+              onTap: () => close('delete'),
             ),
           ],
         ),

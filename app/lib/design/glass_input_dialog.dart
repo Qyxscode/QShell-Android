@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import 'glass_surface.dart';
@@ -24,20 +22,14 @@ Future<String?> showGlassInput(
   TextInputType? keyboardType,
   bool allowEmpty = false,
 }) {
-  final overlay = Overlay.of(context, rootOverlay: true);
-  final completer = Completer<String?>();
-  var closed = false;
-
-  late OverlayEntry entry;
-  void close(String? result) {
-    if (closed) return;
-    closed = true;
-    entry.remove();
-    if (!completer.isCompleted) completer.complete(result);
-  }
-
-  entry = OverlayEntry(
-    builder: (_) => _GlassInputView(
+  // 走路由才能让系统返回键 / 手势返回生效
+  return showGeneralDialog<String>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: title,
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 200),
+    pageBuilder: (context, animation, secondary) => _GlassInputView(
       title: title,
       message: message,
       label: label,
@@ -49,11 +41,9 @@ Future<String?> showGlassInput(
       obscure: obscure,
       keyboardType: keyboardType,
       allowEmpty: allowEmpty,
-      onClose: close,
+      onClose: (value) => Navigator.of(context).pop(value),
     ),
   );
-  overlay.insert(entry);
-  return completer.future;
 }
 
 class _GlassInputView extends StatefulWidget {

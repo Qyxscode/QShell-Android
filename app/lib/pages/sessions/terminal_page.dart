@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../design/glass_sheet.dart';
 import '../../design/glass_toast.dart';
 import '../../design/instant_route.dart';
 import '../../design/glass_card.dart';
@@ -372,11 +373,11 @@ class _TerminalPageState extends State<TerminalPage> {
       _toast(AppStrings.of(context).termNoMemos);
       return;
     }
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (context) {
+    await showGlassSheet<void>(
+      context,
+      title: '',
+      showHeader: false,
+      builder: (context, close) {
         final tokens = AppTokens.of(context);
         final text = Theme.of(context).textTheme;
         return SafeArea(
@@ -401,7 +402,7 @@ class _TerminalPageState extends State<TerminalPage> {
                     ),
                     TextButton.icon(
                       onPressed: () {
-                        Navigator.pop(context);
+                        close(null);
                         Navigator.of(context).push(
                           InstantPageRoute<void>(
                             builder: (_) => const MemoPage(),
@@ -459,7 +460,7 @@ class _TerminalPageState extends State<TerminalPage> {
                               ),
                             ),
                             onTap: () {
-                              Navigator.pop(context);
+                              close(null);
                               _sendKey('${group.items[i].cmd}\n');
                               _toast(AppStrings.of(context).termSentTemplate.replaceAll('{cmd}', group.items[i].cmd));
                             },

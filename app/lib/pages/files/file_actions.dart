@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import '../../design/glass_sheet.dart';
 import '../../design/glass_dialog.dart';
 import '../../design/glass_input_dialog.dart';
 import 'package:flutter/material.dart';
@@ -21,10 +22,11 @@ Future<FileAction?> showFileActionSheet(
 }) {
   final tokens = AppTokens.of(context);
   final text = Theme.of(context).textTheme;
-  return showModalBottomSheet<FileAction>(
-    context: context,
-    showDragHandle: true,
-    builder: (context) => SafeArea(
+  return showGlassSheet<FileAction>(
+    context,
+    title: '',
+    showHeader: false,
+    builder: (context, close) => SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -50,30 +52,30 @@ Future<FileAction?> showFileActionSheet(
             ListTile(
               leading: Icon(Icons.open_in_new_rounded, color: tokens.accent),
               title: Text(AppStrings.of(context).filesOpen),
-              onTap: () => Navigator.pop(context, FileAction.open),
+              onTap: () => close(FileAction.open),
             ),
             ListTile(
               leading: Icon(Icons.download_rounded, color: tokens.accent),
               title: Text(AppStrings.of(context).filesDownload),
               subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-              onTap: () => Navigator.pop(context, FileAction.download),
+              onTap: () => close(FileAction.download),
             ),
           ],
           ListTile(
             leading: Icon(Icons.drive_file_rename_outline_rounded,
                 color: tokens.accent),
             title: Text(AppStrings.of(context).filesRename),
-            onTap: () => Navigator.pop(context, FileAction.rename),
+            onTap: () => close(FileAction.rename),
           ),
           ListTile(
             leading: Icon(Icons.info_outline_rounded, color: tokens.accent),
             title: Text(AppStrings.of(context).filesProperties),
-            onTap: () => Navigator.pop(context, FileAction.properties),
+            onTap: () => close(FileAction.properties),
           ),
           ListTile(
             leading: Icon(Icons.delete_outline_rounded, color: tokens.danger),
             title: Text(AppStrings.of(context).commonDelete, style: TextStyle(color: tokens.danger)),
-            onTap: () => Navigator.pop(context, FileAction.delete),
+            onTap: () => close(FileAction.delete),
           ),
           const SizedBox(height: 8),
         ],

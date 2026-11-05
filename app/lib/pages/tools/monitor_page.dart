@@ -348,10 +348,11 @@ class _MonitorPageState extends State<MonitorPage> {
   }
 
   void _showActions(_NodeRuntime runtime) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
+    showGlassSheet<void>(
+      context,
+      title: '',
+      showHeader: false,
+      builder: (context, close) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -363,7 +364,7 @@ class _MonitorPageState extends State<MonitorPage> {
               leading: const Icon(Icons.network_ping_rounded),
               title: const Text('Ping'),
               onTap: () {
-                Navigator.pop(context);
+                close(null);
                 Navigator.of(context).push(
                   InstantPageRoute<void>(
                     builder: (_) =>
@@ -376,7 +377,7 @@ class _MonitorPageState extends State<MonitorPage> {
               leading: const Icon(Icons.route_rounded),
               title: const Text('Traceroute'),
               onTap: () {
-                Navigator.pop(context);
+                close(null);
                 Navigator.of(context).push(
                   InstantPageRoute<void>(
                     builder: (_) =>
@@ -389,7 +390,7 @@ class _MonitorPageState extends State<MonitorPage> {
               leading: const Icon(Icons.edit_outlined),
               title: Text(AppStrings.of(context).commonEdit),
               onTap: () {
-                Navigator.pop(context);
+                close(null);
                 _editNode(runtime);
               },
             ),
@@ -397,7 +398,7 @@ class _MonitorPageState extends State<MonitorPage> {
               leading: const Icon(Icons.delete_outline_rounded),
               title: Text(AppStrings.of(context).commonDelete),
               onTap: () {
-                Navigator.pop(context);
+                close(null);
                 _removeNode(runtime);
               },
             ),

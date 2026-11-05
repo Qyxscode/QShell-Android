@@ -103,10 +103,11 @@ class _MemoPageState extends State<MemoPage> {
 
   void _groupActions(int groupIndex) {
     final group = _groups[groupIndex];
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
+    showGlassSheet<void>(
+      context,
+      title: '',
+      showHeader: false,
+      builder: (context, close) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -118,7 +119,7 @@ class _MemoPageState extends State<MemoPage> {
               leading: const Icon(Icons.add_rounded),
               title: const Text('在此组新建命令'),
               onTap: () {
-                Navigator.pop(context);
+                close(null);
                 _add(groupName: group.group);
               },
             ),
@@ -126,7 +127,7 @@ class _MemoPageState extends State<MemoPage> {
               leading: const Icon(Icons.drive_file_rename_outline_rounded),
               title: const Text('重命名分组'),
               onTap: () {
-                Navigator.pop(context);
+                close(null);
                 _renameGroup(groupIndex);
               },
             ),
@@ -134,7 +135,7 @@ class _MemoPageState extends State<MemoPage> {
               leading: const Icon(Icons.delete_outline_rounded),
               title: const Text('删除分组'),
               onTap: () {
-                Navigator.pop(context);
+                close(null);
                 _deleteGroup(groupIndex);
               },
             ),
@@ -251,10 +252,11 @@ class _MemoPageState extends State<MemoPage> {
 
   void _showActions(int groupIndex, int itemIndex) {
     final item = _groups[groupIndex].items[itemIndex];
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
+    showGlassSheet<void>(
+      context,
+      title: '',
+      showHeader: false,
+      builder: (context, close) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -270,7 +272,7 @@ class _MemoPageState extends State<MemoPage> {
               leading: const Icon(Icons.copy_rounded),
               title: Text(AppStrings.of(context).memoCopy),
               onTap: () {
-                Navigator.pop(context);
+                close(null);
                 _copy(item.cmd);
               },
             ),
@@ -278,7 +280,7 @@ class _MemoPageState extends State<MemoPage> {
               leading: const Icon(Icons.edit_outlined),
               title: Text(AppStrings.of(context).commonEdit),
               onTap: () {
-                Navigator.pop(context);
+                close(null);
                 _edit(groupIndex, itemIndex);
               },
             ),
@@ -286,7 +288,7 @@ class _MemoPageState extends State<MemoPage> {
               leading: const Icon(Icons.delete_outline_rounded),
               title: Text(AppStrings.of(context).commonDelete),
               onTap: () {
-                Navigator.pop(context);
+                close(null);
                 _remove(groupIndex, itemIndex);
               },
             ),

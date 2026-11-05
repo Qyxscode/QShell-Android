@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../design/glass_sheet.dart';
 import '../../design/glass_dialog.dart';
 import '../../design/glass_toast.dart';
 import '../../design/instant_route.dart';
@@ -80,11 +81,11 @@ class _FilesPageState extends State<FilesPage> {
   }
 
   Future<void> _addServer(String kind) async {
-    final server = await showModalBottomSheet<RemoteServer>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) => Padding(
+    final server = await showGlassSheet<RemoteServer>(
+      context,
+      title: '',
+      showHeader: false,
+      builder: (context, close) => Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
@@ -98,11 +99,11 @@ class _FilesPageState extends State<FilesPage> {
   }
 
   Future<void> _editServer(RemoteServer server) async {
-    final updated = await showModalBottomSheet<RemoteServer>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) => Padding(
+    final updated = await showGlassSheet<RemoteServer>(
+      context,
+      title: '',
+      showHeader: false,
+      builder: (context, close) => Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
@@ -133,10 +134,11 @@ class _FilesPageState extends State<FilesPage> {
   }
 
   void _showServerActions(RemoteServer server) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
+    showGlassSheet<void>(
+      context,
+      title: '',
+      showHeader: false,
+      builder: (context, close) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -145,7 +147,7 @@ class _FilesPageState extends State<FilesPage> {
               title: Text(AppStrings.of(context).commonEdit),
               subtitle: Text(server.subtitle),
               onTap: () {
-                Navigator.pop(context);
+                close(null);
                 _editServer(server);
               },
             ),
@@ -153,7 +155,7 @@ class _FilesPageState extends State<FilesPage> {
               leading: const Icon(Icons.delete_outline_rounded),
               title: Text(AppStrings.of(context).commonDelete),
               onTap: () {
-                Navigator.pop(context);
+                close(null);
                 _removeServer(server);
               },
             ),

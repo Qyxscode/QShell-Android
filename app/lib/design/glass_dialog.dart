@@ -18,31 +18,24 @@ Future<bool> showGlassConfirm(
   String confirmText = '确定',
   String cancelText = '取消',
   bool danger = false,
-}) {
-  final overlay = Overlay.of(context, rootOverlay: true);
-  final completer = Completer<bool>();
-  var closed = false;
-
-  late OverlayEntry entry;
-  void close(bool result) {
-    if (closed) return;
-    closed = true;
-    entry.remove();
-    if (!completer.isCompleted) completer.complete(result);
-  }
-
-  entry = OverlayEntry(
-    builder: (_) => _GlassConfirmView(
+}) async {
+  // 走路由才能让系统返回键 / 手势返回生效（OverlayEntry 不在路由栈里）
+  final result = await showGeneralDialog<bool>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: title,
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 200),
+    pageBuilder: (context, animation, secondary) => _GlassConfirmView(
       title: title,
       message: message,
       confirmText: confirmText,
       cancelText: cancelText,
       danger: danger,
-      onClose: close,
+      onClose: (value) => Navigator.of(context).pop(value),
     ),
   );
-  overlay.insert(entry);
-  return completer.future;
+  return result ?? false;
 }
 
 class _GlassConfirmView extends StatefulWidget {
@@ -247,28 +240,20 @@ Future<void> showGlassInfo(
   required Widget content,
   String closeText = '关闭',
 }) {
-  final overlay = Overlay.of(context, rootOverlay: true);
-  final completer = Completer<void>();
-  var closed = false;
-
-  late OverlayEntry entry;
-  void close() {
-    if (closed) return;
-    closed = true;
-    entry.remove();
-    if (!completer.isCompleted) completer.complete();
-  }
-
-  entry = OverlayEntry(
-    builder: (_) => _GlassInfoView(
+  // 走路由才能让系统返回键 / 手势返回生效
+  return showGeneralDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    barrierLabel: title,
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 200),
+    pageBuilder: (context, animation, secondary) => _GlassInfoView(
       title: title,
       content: content,
       closeText: closeText,
-      onClose: close,
+      onClose: () => Navigator.of(context).pop(),
     ),
   );
-  overlay.insert(entry);
-  return completer.future;
 }
 
 class _GlassInfoView extends StatefulWidget {

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../../design/glass_sheet.dart';
 import '../../design/glass_dialog.dart';
 import '../../design/glass_toast.dart';
 import '../../design/instant_route.dart';
@@ -76,10 +77,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _chooseDownloadLocation() async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
+    final choice = await showGlassSheet<String>(
+      context,
+      title: '',
+      showHeader: false,
+      builder: (context, close) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -90,7 +92,7 @@ class _SettingsPageState extends State<SettingsPage> {
               trailing: _downloadLocation == DownloadHelper.appLocation
                   ? const Icon(Icons.check_rounded)
                   : null,
-              onTap: () => Navigator.pop(context, DownloadHelper.appLocation),
+              onTap: () => close(DownloadHelper.appLocation),
             ),
             ListTile(
               leading: const Icon(Icons.download_rounded),
@@ -100,7 +102,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ? const Icon(Icons.check_rounded)
                   : null,
               onTap: () =>
-                  Navigator.pop(context, DownloadHelper.downloadsLocation),
+                  close(DownloadHelper.downloadsLocation),
             ),
           ],
         ),
