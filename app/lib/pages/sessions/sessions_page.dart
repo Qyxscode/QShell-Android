@@ -38,10 +38,18 @@ class _SessionsPageState extends State<SessionsPage> {
   void initState() {
     super.initState();
     _load();
+    // 从备份恢复 / 新增 / 修改 / 删除配置后立刻刷新；
+    // 之前这些页面常驻 PageView 不会重建，得重启 App 才看得到新主机
+    QShellConfigStore.revision.addListener(_onConfigChanged);
+  }
+
+  void _onConfigChanged() {
+    if (mounted) _load();
   }
 
   @override
   void dispose() {
+    QShellConfigStore.revision.removeListener(_onConfigChanged);
     _searchCtrl.dispose();
     super.dispose();
   }
