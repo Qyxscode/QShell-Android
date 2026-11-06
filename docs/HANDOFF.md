@@ -190,6 +190,14 @@ flutter clean; flutter pub get; flutter build apk --release --target-platform an
 - `adb uninstall` 会清空用户数据（连接、WebDAV 配置），非必要不用
 - 安装后立刻 `am force-stop` + `am start` 会白屏，等几秒再截图
 - 用 `adb shell input tap x y` 操作时，截图是 1080×2414，预览图是 839×1876，坐标要乘 1.287
+- **「无线调试」页面显示 `10.255.0.1` 这类地址不是 QShell 的问题**：那是手机上代理 App（Clash 系）的 `tun0` 地址，Android 11+ 的无线调试页显示的是「当前默认网络」的 IP，VPN 在时就显示 VPN 地址。确认方法：
+
+  ```powershell
+  adb shell dumpsys connectivity | Select-String "VpnTransportInfo|OwnerUid"
+  ```
+
+  看到 `sessionId=QClash` 之类就说明是代理 App。真实 `wlan0` 地址用 `adb shell ip -4 addr show` 看，两者端口号一致就说明 adb 本身没受影响。
+- 保活服务持有的 `WIFI_MODE_FULL_HIGH_PERF` 会让 WiFi 一直保持活跃，从而延长上面那个 VPN 状态的"显示"，但**不影响 adb 调试本身**（实测 VPN 在位时 `install` / `shell` 都正常）。
 
 ---
 
