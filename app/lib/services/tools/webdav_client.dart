@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -263,6 +264,77 @@ class WebdavClient {
       return Uint8List.fromList(chunks);
     } finally {
       client.close();
+    }
+  }
+
+  /// 流式下载到本地文件。
+  ///
+  /// 大文件不能走 [download]（那个把整份内容攒在内存里，几百 MB 会 OOM，
+  /// 表现为下载完成瞬间闪退 / 提示 memory out）。
+  Future<void> downloadToFile(
+    String path,
+    File file, {
+    void Function(int received, int total)? onProgress,
+  }) async {
+    final client = http.Client();
+    final uri = _resolve(path);
+    final sink = file.openWrite();
+    try {
+      final request = http.Request('GET', uri)..headers.addAll(_authHeaders);
+      final streamed = await client.send(request).timeout(_timeout);
+      if (streamed.statusCode >= 400) {
+        throw Exception('下载失败：HTTP ${streamed.statusCode}（$uri）');
+      }
+      final total = streamed.contentLength ?? 0;
+      var received = 0;
+      await for (final chunk in streamed.stream) {
+        received += chunk.length;
+        sink.add(chunk);
+        onProgress?.call(received, total);
+      }
+      await sink.flush();
+    } finally {
+      await sink.close();
+      client.close();
+    }
+  }
+
+  /// 流式上传本地文件（PUT），进度按实际发出的字节算。
+  ///
+  /// 大文件不能走 [upload]（整份 bytes 进内存 + 通过 http body 再复制一份）。
+  Future<void> uploadFile(
+    String path,
+    File file, {
+    void Function(int sent, int total)? onProgress,
+    http.Client? client,
+  }) async {
+    final c = client ?? http.Client();
+    final uri = _resolve(path);
+    try {
+      final length = await file.length();
+      final request = http.StreamedRequest('PUT', uri)
+        ..headers.addAll(<String, String>{
+          ..._authHeaders,
+          'Content-Type': 'application/octet-stream',
+        })
+        ..contentLength = length;
+      // 上传按 10 分钟算：普通请求的 20 秒超时对大文件肯定不够
+      final responseFuture =
+          c.send(request).timeout(const Duration(minutes: 10));
+      var sent = 0;
+      await for (final chunk in file.openRead()) {
+        request.sink.add(chunk);
+        sent += chunk.length;
+        onProgress?.call(sent, length);
+      }
+      await request.sink.close();
+      final response = await responseFuture;
+      await response.stream.drain<void>();
+      if (response.statusCode >= 400) {
+        throw Exception('上传失败：HTTP ${response.statusCode}');
+      }
+    } finally {
+      if (client == null) c.close();
     }
   }
 

@@ -54,6 +54,17 @@ abstract class RemoteFs {
     bool Function()? isCancelled,
   });
 
+  /// 上传本地文件。
+  ///
+  /// 大文件必须走这个：读文件是分块的，进度回调里也不会把整份内容
+  /// 攒在内存里。走 [upload]（整份 bytes）几十 MB 就会 OOM。
+  Future<void> uploadFile(
+    String path,
+    String localPath, {
+    void Function(int sent, int total)? onProgress,
+    bool Function()? isCancelled,
+  });
+
   Future<void> delete(RemoteEntry entry);
 
   /// 重命名（[entry] 所在的同目录内改名）。

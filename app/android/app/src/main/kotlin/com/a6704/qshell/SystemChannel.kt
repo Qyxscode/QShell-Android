@@ -127,6 +127,20 @@ class SystemChannel(private val activity: MainActivity) {
                     activity.runOnUiThread { result.success(uri) }
                 }.start()
             }
+            // 把已落盘的文件流式写进系统下载目录（大文件必须走这个，
+            // 以前是把整个 byte[] 从 Dart 传过来再写，几百 MB 直接 OOM）
+            "saveFileToDownloads" -> {
+                val name = call.argument<String>("name") ?: ""
+                val path = call.argument<String>("path") ?: ""
+                if (name.isEmpty() || path.isEmpty()) {
+                    result.error("bad_args", "缺少文件名或源路径", null)
+                    return
+                }
+                Thread {
+                    val uri = runCatching { saveFileToDownloads(name, path) }.getOrNull()
+                    activity.runOnUiThread { result.success(uri) }
+                }.start()
+            }
             // 终端保活：前台服务（有活跃 SSH 会话时启动/更新）
             "startKeepAlive" -> {
                 val names = call.argument<List<String>>("names") ?: emptyList()
@@ -918,6 +932,46 @@ class SystemChannel(private val activity: MainActivity) {
             values,
         ) ?: return null
         resolver.openOutputStream(uri)?.use { it.write(bytes) } ?: return null
+        return uri.toString()
+    }
+
+    /// 从本地文件流式复制进系统下载目录。
+    ///
+    /// 大文件（几百 MB）不能用 [saveToDownloads]——那条路要把整份内容
+    /// 通过 MethodChannel 从 Dart 传过来，内存直接翻几倍。
+    private fun saveFileToDownloads(name: String, sourcePath: String): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        val source = java.io.File(sourcePath)
+        if (!source.isFile) return null
+        val resolver = activity.contentResolver
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name)
+            put(
+                android.provider.MediaStore.Downloads.MIME_TYPE,
+                mimeFor(name),
+            )
+            put(
+                android.provider.MediaStore.Downloads.RELATIVE_PATH,
+                android.os.Environment.DIRECTORY_DOWNLOADS + "/QShell",
+            )
+        }
+        val uri = resolver.insert(
+            android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+            values,
+        ) ?: return null
+        val copied = runCatching {
+            source.inputStream().use { input ->
+                (resolver.openOutputStream(uri) ?: return@runCatching false).use { output ->
+                    input.copyTo(output, 256 * 1024)
+                }
+            }
+            true
+        }.getOrDefault(false)
+        if (!copied) {
+            // 写失败就把 MediaStore 里那条半成品删掉，别留 0 字节文件
+            runCatching { resolver.delete(uri, null, null) }
+            return null
+        }
         return uri.toString()
     }
 

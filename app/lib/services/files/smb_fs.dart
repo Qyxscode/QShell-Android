@@ -82,6 +82,28 @@ class SmbFs implements RemoteFs {
   }
 
   @override
+  Future<void> uploadFile(
+    String path,
+    String localPath, {
+    void Function(int sent, int total)? onProgress,
+    bool Function()? isCancelled,
+  }) async {
+    final file = File(localPath);
+    final total = await file.length();
+    var sent = 0;
+    Stream<Uint8List> chunks() async* {
+      await for (final chunk in file.openRead()) {
+        if (isCancelled?.call() == true) throw const TransferCancelled();
+        sent += chunk.length;
+        onProgress?.call(sent, total);
+        yield chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
+      }
+    }
+
+    await _pool.streamWrite(path, chunks());
+  }
+
+  @override
   Future<void> delete(RemoteEntry entry) async {
     if (entry.isDirectory) {
       await _pool.rmdir(entry.path);

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dartssh2/dartssh2.dart';
@@ -20,6 +21,11 @@ class SftpEntry {
   final bool isDirectory;
   final int size;
   final DateTime? modified;
+}
+
+/// 上传被用户取消。
+class SftpUploadCancelled implements Exception {
+  const SftpUploadCancelled();
 }
 
 /// SFTP 会话（复用 dartssh2，和终端同一套 SSH 客户端）。
@@ -153,6 +159,39 @@ class SftpService {
         onProgress?.call(offset);
       }
       onProgress?.call(bytes.length);
+    } finally {
+      await file.close();
+    }
+  }
+
+  /// 流式上传本地文件：边读边写，内存里只有一个分块。
+  ///
+  /// 大文件不要走 [writeAll]（那个要求整份 bytes 在内存里）。
+  Future<void> writeFile(
+    String path,
+    String localPath, {
+    void Function(int sent, int total)? onProgress,
+    bool Function()? isCancelled,
+  }) async {
+    final local = File(localPath);
+    final total = await local.length();
+    final file = await _sftp.open(
+      path,
+      mode: SftpFileOpenMode.create |
+          SftpFileOpenMode.write |
+          SftpFileOpenMode.truncate,
+    );
+    try {
+      var offset = 0;
+      await for (final chunk in local.openRead()) {
+        if (isCancelled?.call() == true) {
+          throw const SftpUploadCancelled();
+        }
+        final data = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
+        await file.writeBytes(data, offset: offset);
+        offset += data.length;
+        onProgress?.call(offset, total);
+      }
     } finally {
       await file.close();
     }

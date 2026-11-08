@@ -39,21 +39,15 @@ class WebdavFs implements RemoteFs {
     void Function(int received, int total)? onProgress,
     bool Function()? isCancelled,
   }) async {
-    final file = File(localPath);
-    final sink = file.openWrite();
-    try {
-      final bytes = await _client.download(
-        path,
-        onProgress: (received, total) {
-          if (isCancelled?.call() == true) throw const TransferCancelled();
-          onProgress?.call(received, total);
-        },
-      );
-      sink.add(bytes);
-      await sink.flush();
-    } finally {
-      await sink.close();
-    }
+    // 流式写盘：以前是把整个文件读成 bytes 再写，大文件会 OOM
+    await _client.downloadToFile(
+      path,
+      File(localPath),
+      onProgress: (received, total) {
+        if (isCancelled?.call() == true) throw const TransferCancelled();
+        onProgress?.call(received, total);
+      },
+    );
   }
 
   @override
@@ -66,6 +60,23 @@ class WebdavFs implements RemoteFs {
     if (isCancelled?.call() == true) throw const TransferCancelled();
     await _client.upload(path, bytes);
     onProgress?.call(bytes.length, bytes.length);
+  }
+
+  @override
+  Future<void> uploadFile(
+    String path,
+    String localPath, {
+    void Function(int sent, int total)? onProgress,
+    bool Function()? isCancelled,
+  }) async {
+    await _client.uploadFile(
+      path,
+      File(localPath),
+      onProgress: (sent, total) {
+        if (isCancelled?.call() == true) throw const TransferCancelled();
+        onProgress?.call(sent, total);
+      },
+    );
   }
 
   @override

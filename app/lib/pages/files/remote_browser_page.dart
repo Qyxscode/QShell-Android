@@ -303,22 +303,31 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
     try {
       final picked = await FilePicker.pickFile();
       if (picked == null) return;
-      final bytes = await picked.readAsBytes();
+      final localPath = picked.path;
+      if (localPath == null) {
+        if (mounted) _toast('无法读取所选文件');
+        return;
+      }
+      final localSize = await File(localPath).length();
       if (!mounted) return;
       setState(() {
         _transferName = picked.name;
-        _transferTotal = bytes.length;
+        _transferTotal = localSize;
         _transferDone = 0;
         _transferUpload = true;
         _cancelRequested = false;
       });
       final target = _path.isEmpty ? picked.name : '$_path/${picked.name}';
-      await fs.upload(
+      // 走 uploadFile：边读边发，大文件不会整份读进内存
+      await fs.uploadFile(
         target,
-        bytes,
+        localPath,
         onProgress: (sent, total) {
           if (!mounted) return;
-          setState(() => _transferDone = sent);
+          setState(() {
+            _transferDone = sent;
+            if (total > 0) _transferTotal = total;
+          });
         },
         isCancelled: () => _cancelRequested,
       );

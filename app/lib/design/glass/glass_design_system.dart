@@ -44,9 +44,11 @@ class GlassDesignSystem implements DesignSystem {
       outlineSoft: isDark
           ? Colors.white.withValues(alpha: 0.08)
           : Colors.black.withValues(alpha: 0.06),
+      // 进度条轨道：浅色下原来是 50% 黑，在白色卡片上是一条深灰，很突兀。
+      // 改成 10% 黑（浅灰），和其余描边同一档次。
       track: isDark
-      ? Colors.white.withValues(alpha: 0.16)
-      : Colors.black.withValues(alpha: 0.5),
+          ? Colors.white.withValues(alpha: 0.16)
+          : Colors.black.withValues(alpha: 0.10),
       glass: true,
     );
 

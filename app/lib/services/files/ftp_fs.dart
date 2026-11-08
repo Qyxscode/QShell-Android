@@ -65,6 +65,25 @@ class FtpFs implements RemoteFs {
   }
 
   @override
+  Future<void> uploadFile(
+    String path,
+    String localPath, {
+    void Function(int sent, int total)? onProgress,
+    bool Function()? isCancelled,
+  }) async {
+    if (isCancelled?.call() == true) throw const TransferCancelled();
+    final ok = await _ftp.uploadFile(
+      File(localPath),
+      sRemoteName: path,
+      onProgress: (progress, sent, total) {
+        if (isCancelled?.call() == true) throw const TransferCancelled();
+        onProgress?.call(sent, total);
+      },
+    );
+    if (!ok) throw Exception('上传失败：$path');
+  }
+
+  @override
   Future<void> upload(
     String path,
     List<int> bytes, {

@@ -320,32 +320,41 @@ class _SftpBrowserPageState extends State<SftpBrowserPage> {
     try {
       final picked = await FilePicker.pickFile();
       if (picked == null) return;
-      final bytes = await picked.readAsBytes();
+      final localPath = picked.path;
+      if (localPath == null) {
+        if (mounted) _toast('无法读取所选文件');
+        return;
+      }
       final target = _path.endsWith('/')
           ? '$_path${picked.name}'
           : '$_path/${picked.name}';
+      final localSize = await File(localPath).length();
       if (!mounted) return;
       setState(() {
         _transferName = picked.name;
-        _transferTotal = bytes.length;
+        _transferTotal = localSize;
         _transferDone = 0;
         _transferUpload = true;
         _cancelRequested = false;
       });
-      await sftp.writeAll(
+      // 流式上传：边读文件边写远端，大文件不会整份进内存
+      await sftp.writeFile(
         target,
-        bytes,
-        onProgress: (sent) {
-          if (_cancelRequested) throw const _TransferCancelled();
+        localPath,
+        onProgress: (sent, total) {
           if (!mounted) return;
-          setState(() => _transferDone = sent);
+          setState(() {
+            _transferDone = sent;
+            if (total > 0) _transferTotal = total;
+          });
         },
+        isCancelled: () => _cancelRequested,
       );
       if (!mounted) return;
       setState(() => _transferName = null);
-      _toast('已上传 ${picked.name}（${_fmtSize(bytes.length)}）');
+      _toast('已上传 ${picked.name}（${_fmtSize(localSize)}）');
       await _list(_path);
-    } on _TransferCancelled {
+    } on SftpUploadCancelled {
       if (!mounted) return;
       setState(() => _transferName = null);
       _toast(AppStrings.of(context).browserUploadCancelled);

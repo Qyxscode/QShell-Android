@@ -646,6 +646,25 @@ class SystemService {
     }
   }
 
+  /// 把一个**已落盘的文件**复制进系统「下载」目录（大文件必须用这个）。
+  ///
+  /// 走 [saveToDownloads] 需要把整份内容经 MethodChannel 传过去，
+  /// 几百 MB 的文件会直接把内存撑爆（下载完就闪退）。这里只传路径，
+  /// 复制在原生侧分块完成。
+  static Future<String?> saveFileToDownloads(
+    String name,
+    String sourcePath,
+  ) async {
+    try {
+      return await _channel.invokeMethod<String>('saveFileToDownloads', {
+        'name': name,
+        'path': sourcePath,
+      });
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// 列出 Download/QShell 下的文件（MediaStore 查询，分区存储下只能这样读）。
   static Future<List<DownloadEntry>> listDownloads() async {
     try {

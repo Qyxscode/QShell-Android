@@ -29,13 +29,15 @@ class DownloadHelper {
   }
 
   /// 把下载完成的文件放到用户选择的目录，返回最终路径 / URI。
+  ///
+  /// 注意走 `saveFileToDownloads`（原生侧分块复制）而不是读成 bytes：
+  /// 之前 280MB 的包下载到最后一步会 `readAsBytes()`，内存直接爆掉闪退。
   static Future<String> finalize(String tempFilePath, String name) async {
     final location = await getLocation();
     final file = File(tempFilePath);
     if (location == downloadsLocation) {
       try {
-        final bytes = await file.readAsBytes();
-        final uri = await SystemService.saveToDownloads(name, bytes);
+        final uri = await SystemService.saveFileToDownloads(name, tempFilePath);
         if (uri != null) {
           if (await file.exists()) {
             try {
