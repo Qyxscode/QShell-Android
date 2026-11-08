@@ -41,3 +41,6 @@ Thumbs.db
 # 内部文档（不进公开仓库）
 REQ-ANDROID.md
 SPIKE-REPORT.md
+
+# 内部交接文档：只留本地，不要进公开仓库
+docs/HANDOFF.md
