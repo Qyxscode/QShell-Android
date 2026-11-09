@@ -262,6 +262,44 @@ Future<IperfResult> runIperf({
   }
 }
 
+/// 本机回环测试：临时在设备上起一个 iperf3 服务端，客户端连 127.0.0.1。
+///
+/// 测的是 loopback 吞吐（CPU / 内存拷贝上限），**不代表**网卡或 WiFi 速率；
+/// 用来判断「性能上限在哪」——如果回环都只有几百 Mbps，
+/// 那么跑外网再怎么测也超不过这个数。
+Future<IperfResult> runIperfLoopback({
+  required String binaryPath,
+  required IperfOptions options,
+}) async {
+  final port = options.port;
+  final server = await Process.start(binaryPath, <String>[
+    '-s',
+    '-p',
+    '$port',
+  ]);
+  // 服务端输出必须消费掉，否则管道写满会把它卡住
+  server.stdout.listen((_) {});
+  server.stderr.listen((_) {});
+  try {
+    // 给它一点时间绑定端口；连 127.0.0.1 不出本机，失败了就是真没起来
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    return await runIperf(
+      binaryPath: binaryPath,
+      options: options.copyWith(host: '127.0.0.1'),
+    );
+  } catch (e) {
+    final text = e.toString();
+    if (text.contains('refused') || text.contains('unable to connect')) {
+      throw Exception('本机 iperf3 服务端没有起来，端口 $port 可能被占用');
+    }
+    rethrow;
+  } finally {
+    try {
+      server.kill();
+    } catch (_) {}
+  }
+}
+
 /// 友好的错误文案。
 String iperfErrorText(Object e) {
   final text = e.toString().toLowerCase();

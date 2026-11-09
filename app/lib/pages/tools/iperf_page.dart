@@ -27,6 +27,10 @@ class _IperfPageState extends State<IperfPage> {
   bool _udp = false;
   IperfDirection _direction = IperfDirection.up;
 
+  /// 本机回环：在设备本地起服务端，客户端连 127.0.0.1
+  bool _loopback = false;
+  String? _loopbackNote;
+
   bool _running = false;
   String? _binaryPath;
   String? _error;
@@ -91,7 +95,7 @@ class _IperfPageState extends State<IperfPage> {
     final binary = _binaryPath;
     if (binary == null) return;
     final options = _buildOptions();
-    if (options.host.isEmpty) {
+    if (options.host.isEmpty && !_loopback) {
       setState(() => _error = AppStrings.of(context).iperfServerRequired);
       return;
     }
@@ -100,13 +104,19 @@ class _IperfPageState extends State<IperfPage> {
       _running = true;
       _error = null;
       _result = null;
+      _loopbackNote = null;
     });
     try {
-      final result = await runIperf(binaryPath: binary, options: options);
+      final result = _loopback
+          ? await runIperfLoopback(binaryPath: binary, options: options)
+          : await runIperf(binaryPath: binary, options: options);
       if (!mounted) return;
       setState(() {
         _result = result;
         _running = false;
+        _loopbackNote = _loopback
+            ? '本机回环：测的是 CPU / 内存拷贝上限，不代表网卡速率'
+            : null;
       });
     } catch (e) {
       if (!mounted) return;
@@ -131,11 +141,28 @@ class _IperfPageState extends State<IperfPage> {
         children: [
           ToolCard(
             children: [
-              ToolField(
-                label: AppStrings.of(context).iperfServer,
-                controller: _hostCtrl,
-                hint: AppStrings.of(context).sessionsHostHint,
+              SwitchListTile(
+                value: _loopback,
+                onChanged: _running
+                    ? null
+                    : (value) => setState(() => _loopback = value),
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text('本机回环测试',
+                    style: text.bodyMedium
+                        ?.copyWith(color: tokens.textPrimary)),
+                subtitle: Text(
+                  '在设备本地起服务端、客户端连 127.0.0.1，测吞吐上限（不代表网卡速率）',
+                  style: text.bodySmall
+                      ?.copyWith(color: tokens.textSecondary),
+                ),
               ),
+              if (!_loopback)
+                ToolField(
+                  label: AppStrings.of(context).iperfServer,
+                  controller: _hostCtrl,
+                  hint: AppStrings.of(context).sessionsHostHint,
+                ),
               ToolField(
                 label: AppStrings.of(context).commonPort,
                 controller: _portCtrl,
@@ -309,6 +336,14 @@ class _IperfPageState extends State<IperfPage> {
                             '${result.lostPercent?.toStringAsFixed(2) ?? "--"}%（${result.lostPackets ?? 0} 个）',
                         tokens: tokens,
                         text: text,
+                      ),
+                    ],
+                    if (_loopbackNote != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _loopbackNote!,
+                        style: text.bodySmall
+                            ?.copyWith(color: tokens.accent),
                       ),
                     ],
                     const SizedBox(height: 10),

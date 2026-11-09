@@ -36,6 +36,91 @@ class _AppFolderPageState extends State<AppFolderPage> {
   String _location = DownloadHelper.appLocation;
   bool _loading = true;
 
+  /// 多选模式：长按任意一项进入，用于批量删除
+  bool _selecting = false;
+  final Set<String> _selected = <String>{};
+
+  String _keyOfItem(FileSystemEntity e) => e.path;
+
+  String _keyOfDownload(DownloadEntry d) => d.uri;
+
+  List<String> get _allKeys => _isDownloads
+      ? _downloads.map(_keyOfDownload).toList()
+      : _files.map(_keyOfItem).toList();
+
+  void _enterSelect(String key) {
+    setState(() {
+      _selecting = true;
+      _selected
+        ..clear()
+        ..add(key);
+    });
+  }
+
+  void _exitSelect() {
+    setState(() {
+      _selecting = false;
+      _selected.clear();
+    });
+  }
+
+  void _toggleSelect(String key) {
+    setState(() {
+      if (!_selected.remove(key)) _selected.add(key);
+    });
+  }
+
+  void _toggleSelectAll() {
+    final keys = _allKeys;
+    setState(() {
+      if (_selected.length == keys.length) {
+        _selected.clear();
+      } else {
+        _selected
+          ..clear()
+          ..addAll(keys);
+      }
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    final count = _selected.length;
+    if (count == 0) return;
+    final ok = await showGlassConfirm(
+      context,
+      title: '删除选中项',
+      message: '确定删除选中的 $count 项？删除后无法恢复。',
+      confirmText: '删除',
+      danger: true,
+    );
+    if (ok != true || !mounted) return;
+    var failed = 0;
+    if (_isDownloads) {
+      for (final entry in _downloads) {
+        if (!_selected.contains(_keyOfDownload(entry))) continue;
+        final done = await SystemService.deleteDownload(entry.uri);
+        if (!done) failed++;
+      }
+    } else {
+      for (final item in _files) {
+        if (!_selected.contains(_keyOfItem(item))) continue;
+        try {
+          await item.delete(recursive: true);
+        } catch (_) {
+          failed++;
+        }
+      }
+    }
+    _exitSelect();
+    await _load();
+    if (!mounted) return;
+    showGlassToast(
+      context,
+      failed == 0 ? '已删除 $count 项' : '已删除 ${count - failed} 项，$failed 项失败',
+      tone: failed == 0 ? GlassToastTone.success : GlassToastTone.error,
+    );
+  }
+
   bool get _isDownloads => _location == DownloadHelper.downloadsLocation;
 
   int get _count => _isDownloads ? _downloads.length : _files.length;
@@ -137,13 +222,42 @@ class _AppFolderPageState extends State<AppFolderPage> {
       // 玻璃主题靠壁纸透出做材质，MD3 没有壁纸层，透明只会让页面「消失」
       backgroundColor: tokens.glass ? Colors.transparent : tokens.background,
       appBar: AppBar(
-        title: Text(_isDownloads ? '下载文件夹' : '应用文件夹'),
+        leading: _selecting
+            ? IconButton(
+                tooltip: '取消',
+                onPressed: _exitSelect,
+                icon: const Icon(Icons.close_rounded),
+              )
+            : null,
+        title: Text(
+          _selecting
+              ? '已选 ${_selected.length} 项'
+              : (_isDownloads ? '下载文件夹' : '应用文件夹'),
+        ),
         actions: [
-          IconButton(
-            tooltip: strings.filesRefresh,
-            onPressed: _load,
-            icon: const Icon(Icons.refresh_rounded),
-          ),
+          if (_selecting)
+            TextButton(
+              onPressed: _toggleSelectAll,
+              child: Text(
+                _selected.length == _count ? '取消全选' : '全选',
+              ),
+            )
+          else ...[
+            IconButton(
+              tooltip: '批量选择',
+              onPressed: _count == 0
+                  ? null
+                  : () {
+                      setState(() => _selecting = true);
+                    },
+              icon: const Icon(Icons.checklist_rounded),
+            ),
+            IconButton(
+              tooltip: strings.filesRefresh,
+              onPressed: _load,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
         ],
       ),
       body: Column(
@@ -194,6 +308,27 @@ class _AppFolderPageState extends State<AppFolderPage> {
                     ? _empty(tokens, text)
                     : _list(tokens, text),
           ),
+          if (_selecting)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: SafeArea(
+                top: false,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed:
+                        _selected.isEmpty ? null : _deleteSelected,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: tokens.danger,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    label: Text('删除 ${_selected.length} 项'),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -233,12 +368,23 @@ class _AppFolderPageState extends State<AppFolderPage> {
       itemBuilder: (context, index) {
         if (_isDownloads) {
           final d = _downloads[index];
+          final key = _keyOfDownload(d);
           return RemoteEntryTile(
             name: d.name,
             isDirectory: false,
             subtitle: _fmtSize(d.size),
-            onTap: () => _openDownload(d),
-            onLongPress: () => _showDownloadActions(d),
+            trailing: _selecting
+                ? Checkbox(
+                    value: _selected.contains(key),
+                    onChanged: (_) => _toggleSelect(key),
+                  )
+                : null,
+            onTap: _selecting
+                ? () => _toggleSelect(key)
+                : () => _openDownload(d),
+            onLongPress: _selecting
+                ? null
+                : () => _showDownloadActions(d),
           );
         }
         final item = _files[index];
@@ -254,6 +400,7 @@ class _AppFolderPageState extends State<AppFolderPage> {
               })()
             : '文件夹';
         final showThumb = item is File && isPreviewableImageName(name);
+        final key = _keyOfItem(item);
         return RemoteEntryTile(
           name: name,
           isDirectory: isDir,
@@ -267,8 +414,14 @@ class _AppFolderPageState extends State<AppFolderPage> {
                   errorBuilder: (_, _, _) => const SizedBox.shrink(),
                 )
               : null,
-          onTap: () => _open(item),
-          onLongPress: () => _showFileActions(item),
+          trailing: _selecting
+              ? Checkbox(
+                  value: _selected.contains(key),
+                  onChanged: (_) => _toggleSelect(key),
+                )
+              : null,
+          onTap: _selecting ? () => _toggleSelect(key) : () => _open(item),
+          onLongPress: _selecting ? null : () => _showFileActions(item),
         );
       },
     );
@@ -371,6 +524,8 @@ class _AppFolderPageState extends State<AppFolderPage> {
     switch (action) {
       case 'open':
         await _open(item);
+      case 'select':
+        _enterSelect(_keyOfItem(item));
       case 'rename':
         await _rename(item);
       case 'delete':
@@ -476,6 +631,8 @@ class _AppFolderPageState extends State<AppFolderPage> {
     switch (action) {
       case 'open':
         await _openDownload(entry);
+      case 'select':
+        _enterSelect(_keyOfDownload(entry));
       case 'delete':
         final ok = await showGlassConfirm(
           context,
@@ -524,6 +681,14 @@ class _AppFolderPageState extends State<AppFolderPage> {
               text: text,
               onTap: () => close('rename'),
             ),
+          _MenuRow(
+            icon: Icons.checklist_rounded,
+            label: '多选（批量删除）',
+            color: tokens.accent,
+            tokens: tokens,
+            text: text,
+            onTap: () => close('select'),
+          ),
           _MenuRow(
             icon: Icons.delete_outline_rounded,
             label: strings.commonDelete,
