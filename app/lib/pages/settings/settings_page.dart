@@ -45,6 +45,9 @@ class _SettingsPageState extends State<SettingsPage>
   bool _location = false;
   bool _importing = false;
 
+  /// 「外观」卡片的展开状态：切换设计语言会重建整页，靠它保住展开
+  bool _appearanceExpanded = false;
+
   /// 语言切换暂时不开放（翻译还没覆盖所有页面）
   static const bool _showLanguage = true;
 
@@ -436,8 +439,12 @@ class _SettingsPageState extends State<SettingsPage>
               GlassCard(
                 clipBehavior: Clip.antiAlias,
                 child: ExpansionTile(
+                  // 切换设计语言/主题会重建整页，展开状态必须自己留着，
+                  // 否则每次切 MD3 / 液态玻璃都会自动收起
+                  key: const PageStorageKey<String>('settings.appearance'),
+                  initiallyExpanded: _appearanceExpanded,
+                  onExpansionChanged: (value) => _appearanceExpanded = value,
                   // 外观选项默认折叠，减少设置页长度
-                  initiallyExpanded: false,
                   shape: const Border(),
                   collapsedShape: const Border(),
                   leading: Icon(Icons.palette_outlined, color: tokens.accent),
@@ -767,6 +774,7 @@ class _SettingsPageState extends State<SettingsPage>
                 clipBehavior: Clip.antiAlias,
                 child: ExpansionTile(
                   // 终端选项默认折叠，避免设置页太长
+                  key: const PageStorageKey<String>('settings.terminal'),
                   initiallyExpanded: false,
                   shape: const Border(),
                   collapsedShape: const Border(),
@@ -976,6 +984,7 @@ class _SettingsPageState extends State<SettingsPage>
                 clipBehavior: Clip.antiAlias,
                 child: ExpansionTile(
                   // 数据操作也默认折叠
+                  key: const PageStorageKey<String>('settings.data'),
                   initiallyExpanded: false,
                   shape: const Border(),
                   collapsedShape: const Border(),
@@ -1069,6 +1078,7 @@ class _SettingsPageState extends State<SettingsPage>
                 clipBehavior: Clip.antiAlias,
                 child: ExpansionTile(
                   // 权限状态默认折叠
+                  key: const PageStorageKey<String>('settings.permissions'),
                   initiallyExpanded: false,
                   shape: const Border(),
                   collapsedShape: const Border(),

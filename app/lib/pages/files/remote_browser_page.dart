@@ -6,7 +6,6 @@ import 'package:file_picker/file_picker.dart';
 import '../../design/glass_input_dialog.dart';
 import '../../design/glass_dialog.dart';
 import '../../design/glass_toast.dart';
-import '../../design/glass_card.dart';
 import '../../design/instant_route.dart';
 import 'package:flutter/material.dart';
 
@@ -16,7 +15,9 @@ import '../../services/download_helper.dart';
 import '../../services/files/ftp_fs.dart';
 import '../../services/files/remote_fs.dart';
 import '../../services/files/smb_fs.dart';
+import '../../services/files/transfer_center.dart';
 import '../../services/files/webdav_fs.dart';
+import '../../widgets/transfer_panel.dart';
 import 'file_icon.dart';
 import 'file_actions.dart';
 import 'video_preview_page.dart';
@@ -39,11 +40,6 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   String? _error;
 
   DateTime? _lastBackAt;
-  String? _transferName;
-  int _transferTotal = 0;
-  int _transferDone = 0;
-  bool _transferUpload = false;
-  bool _cancelRequested = false;
 
   @override
   void initState() {
@@ -178,13 +174,11 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
       }
     }
 
-    setState(() {
-      _transferName = entry.name;
-      _transferTotal = entry.size;
-      _transferDone = 0;
-      _transferUpload = false;
-      _cancelRequested = false;
-    });
+    final openTask = TransferCenter.instance.start(
+      name: entry.name,
+      upload: false,
+      total: entry.size,
+    );
     try {
       // 同目录图片一起带进图库，支持左右翻页；其余按需下载
       final images = _entries
@@ -216,21 +210,19 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
           entry.path,
           localPath,
           onProgress: (received, total) {
-            if (!mounted) return;
-            setState(() {
-              _transferDone = received;
-              if (total > 0) _transferTotal = total;
-            });
+            TransferCenter.instance
+                .update(openTask, done: received, total: total);
           },
-          isCancelled: () => _cancelRequested,
+          isCancelled: () => openTask.cancelRequested,
         );
       }, context: context, gallery: gallery, galleryStart: startIndex);
+      TransferCenter.instance.finish(openTask, TransferStatus.done);
     } on TransferCancelled {
-      // 忽略
+      TransferCenter.instance.finish(openTask, TransferStatus.cancelled);
     } catch (e) {
+      TransferCenter.instance
+          .finish(openTask, TransferStatus.failed, message: '$e');
       if (mounted) _toast(AppStrings.of(context).browserOpenFailedTemplate.replaceAll('{msg}', '$e'));
-    } finally {
-      if (mounted) setState(() => _transferName = null);
     }
   }
 
@@ -261,38 +253,36 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   Future<void> _download(RemoteEntry entry) async {
     final fs = _fs;
     if (fs == null) return;
-    setState(() {
-      _transferName = entry.name;
-      _transferTotal = entry.size;
-      _transferDone = 0;
-      _transferUpload = false;
-      _cancelRequested = false;
-    });
+    final task = TransferCenter.instance.start(
+      name: entry.name,
+      upload: false,
+      total: entry.size,
+    );
     try {
-      final tempPath = await DownloadHelper.tempPath(entry.name);
+      // 同一个文件重复下载时临时文件名要分开，否则互相覆盖
+      final tempPath =
+          await DownloadHelper.tempPath('${task.id}_${entry.name}');
       await fs.download(
         entry.path,
         tempPath,
         onProgress: (received, total) {
-          if (!mounted) return;
-          setState(() {
-            _transferDone = received;
-            if (total > 0) _transferTotal = total;
-          });
+          TransferCenter.instance.update(task, done: received, total: total);
         },
-        isCancelled: () => _cancelRequested,
+        isCancelled: () => task.cancelRequested,
       );
       final finalPath = await DownloadHelper.finalize(tempPath, entry.name);
+      TransferCenter.instance
+          .finish(task, TransferStatus.done, message: finalPath);
       if (!mounted) return;
-      setState(() => _transferName = null);
       _toast('已下载 ${entry.name}\n$finalPath');
     } on TransferCancelled {
+      TransferCenter.instance.finish(task, TransferStatus.cancelled);
       if (!mounted) return;
-      setState(() => _transferName = null);
       _toast('已取消下载 ${entry.name}');
     } catch (e) {
+      TransferCenter.instance
+          .finish(task, TransferStatus.failed, message: '$e');
       if (!mounted) return;
-      setState(() => _transferName = null);
       _toast(AppStrings.of(context).browserDownloadFailedTemplate.replaceAll('{msg}', '$e'));
     }
   }
@@ -300,6 +290,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   Future<void> _upload() async {
     final fs = _fs;
     if (fs == null) return;
+    TransferTask? task;
     try {
       final picked = await FilePicker.pickFile();
       if (picked == null) return;
@@ -310,39 +301,40 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
       }
       final localSize = await File(localPath).length();
       if (!mounted) return;
-      setState(() {
-        _transferName = picked.name;
-        _transferTotal = localSize;
-        _transferDone = 0;
-        _transferUpload = true;
-        _cancelRequested = false;
-      });
       final target = _path.isEmpty ? picked.name : '$_path/${picked.name}';
+      final started = TransferCenter.instance.start(
+        name: picked.name,
+        upload: true,
+        total: localSize,
+      );
+      task = started;
       // 走 uploadFile：边读边发，大文件不会整份读进内存
       await fs.uploadFile(
         target,
         localPath,
         onProgress: (sent, total) {
-          if (!mounted) return;
-          setState(() {
-            _transferDone = sent;
-            if (total > 0) _transferTotal = total;
-          });
+          TransferCenter.instance.update(started, done: sent, total: total);
         },
-        isCancelled: () => _cancelRequested,
+        isCancelled: () => started.cancelRequested,
       );
+      TransferCenter.instance
+          .finish(started, TransferStatus.done, message: target);
       if (!mounted) return;
-      setState(() => _transferName = null);
       _toast(AppStrings.of(context).browserUploadedTemplate.replaceAll('{name}', picked.name));
       await _list(_path);
     } on TransferCancelled {
+      if (task != null) {
+        TransferCenter.instance.finish(task, TransferStatus.cancelled);
+      }
       if (!mounted) return;
-      setState(() => _transferName = null);
       _toast(AppStrings.of(context).browserUploadCancelled);
       await _list(_path);
     } catch (e) {
+      if (task != null) {
+        TransferCenter.instance
+            .finish(task, TransferStatus.failed, message: '$e');
+      }
       if (!mounted) return;
-      setState(() => _transferName = null);
       _toast(AppStrings.of(context).browserUploadFailedTemplate.replaceAll('{msg}', '$e'));
     }
   }
@@ -413,10 +405,6 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
     final text = Theme.of(context).textTheme;
-    final transferring = _transferName != null;
-    final progress = _transferTotal <= 0
-        ? null
-        : (_transferDone / _transferTotal).clamp(0.0, 1.0);
 
     return PopScope(
       canPop: false,
@@ -454,75 +442,8 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
       ),
       body: Column(
         children: [
-          if (transferring)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-              child: GlassCard(
-                margin: EdgeInsets.zero,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 10, 8, 14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            _transferUpload
-                                ? Icons.upload_rounded
-                                : Icons.download_rounded,
-                            size: 16,
-                            color: tokens.accent,
-                          ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              '${_transferUpload ? "上传" : "下载"} $_transferName',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: text.bodySmall
-                                  ?.copyWith(color: tokens.textPrimary),
-                            ),
-                          ),
-                          Text(
-                            progress == null
-                                ? ''
-                                : '${(progress * 100).round()}%',
-                            style: text.labelSmall
-                                ?.copyWith(color: tokens.textSecondary),
-                          ),
-                          IconButton(
-                            tooltip: '取消',
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () =>
-                                setState(() => _cancelRequested = true),
-                            icon: Icon(Icons.close_rounded,
-                                size: 18, color: tokens.textSecondary),
-                          ),
-                        ],
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(100),
-                          child: LinearProgressIndicator(
-                            value: progress,
-                            minHeight: 5,
-                            backgroundColor: tokens.track,
-                            color: tokens.accent,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${_fmtSize(_transferDone)} / ${_fmtSize(_transferTotal)}',
-                        style: text.labelSmall
-                            ?.copyWith(color: tokens.textSecondary),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+          // 所有进行中的上传/下载都列在这里，互不顶替
+          const TransferPanel(),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())

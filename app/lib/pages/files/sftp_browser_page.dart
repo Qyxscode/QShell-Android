@@ -5,7 +5,6 @@ import 'package:path_provider/path_provider.dart';
 import '../../design/glass_input_dialog.dart';
 import '../../design/glass_dialog.dart';
 import '../../design/glass_toast.dart';
-import '../../design/glass_card.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -13,7 +12,9 @@ import 'package:flutter/material.dart';
 import '../../design/tokens.dart';
 import '../../i18n/app_strings.dart';
 import '../../services/download_helper.dart';
+import '../../services/files/transfer_center.dart';
 import '../../services/tools/sftp_service.dart';
+import '../../widgets/transfer_panel.dart';
 
 import 'file_icon.dart';
 import 'file_actions.dart';
@@ -58,13 +59,8 @@ class _SftpBrowserPageState extends State<SftpBrowserPage> {
   bool _loading = true;
   String? _error;
 
-  // 传输状态
+  // 传输状态统一交给 TransferCenter，这里只留返回手势的时间戳
   DateTime? _lastBackAt;
-  String? _transferName;
-  int _transferTotal = 0;
-  int _transferDone = 0;
-  bool _transferUpload = false;
-  bool _cancelRequested = false;
 
   @override
   void initState() {
@@ -169,13 +165,11 @@ class _SftpBrowserPageState extends State<SftpBrowserPage> {
   Future<void> _open(SftpEntry entry) async {
     final sftp = _sftp;
     if (sftp == null) return;
-    setState(() {
-      _transferName = entry.name;
-      _transferTotal = entry.size;
-      _transferDone = 0;
-      _transferUpload = false;
-      _cancelRequested = false;
-    });
+    final openTask = TransferCenter.instance.start(
+      name: entry.name,
+      upload: false,
+      total: entry.size,
+    );
     try {
       // 同目录图片一起带进图库
       final images = _entries
@@ -217,12 +211,11 @@ class _SftpBrowserPageState extends State<SftpBrowserPage> {
           await sftp.downloadTo(
             entry.path,
             (bytes, chunk) {
-              if (_cancelRequested) throw const _TransferCancelled();
+              if (openTask.cancelRequested) throw const _TransferCancelled();
               sink.add(chunk);
             },
             onProgress: (bytesRead) {
-              if (!mounted) return;
-              setState(() => _transferDone = bytesRead);
+              TransferCenter.instance.update(openTask, done: bytesRead);
             },
           );
           await sink.flush();
@@ -230,12 +223,13 @@ class _SftpBrowserPageState extends State<SftpBrowserPage> {
           await sink.close();
         }
       }, context: context, gallery: gallery, galleryStart: startIndex);
+      TransferCenter.instance.finish(openTask, TransferStatus.done);
     } on _TransferCancelled {
-      // 用户取消，忽略
+      TransferCenter.instance.finish(openTask, TransferStatus.cancelled);
     } catch (e) {
+      TransferCenter.instance
+          .finish(openTask, TransferStatus.failed, message: '$e');
       if (mounted) _toast(AppStrings.of(context).browserOpenFailedTemplate.replaceAll('{msg}', '$e'));
-    } finally {
-      if (mounted) setState(() => _transferName = null);
     }
   }
 
@@ -270,15 +264,14 @@ class _SftpBrowserPageState extends State<SftpBrowserPage> {
     final sftp = _sftp;
     if (sftp == null) return;
     final name = entry.path.split('/').last;
-    setState(() {
-      _transferName = name;
-      _transferTotal = entry.size;
-      _transferDone = 0;
-      _transferUpload = false;
-      _cancelRequested = false;
-    });
-    // 先写临时目录，完成后按设置决定落盘位置
-    final tempPath = await DownloadHelper.tempPath(name);
+    final task = TransferCenter.instance.start(
+      name: name,
+      upload: false,
+      total: entry.size,
+    );
+    // 先写临时目录，完成后按设置决定落盘位置；
+    // 临时名带上任务号，同名文件同时下载才不会互相覆盖
+    final tempPath = await DownloadHelper.tempPath('${task.id}_$name');
     final target = File(tempPath);
     final sink = target.openWrite();
     try {
@@ -286,30 +279,31 @@ class _SftpBrowserPageState extends State<SftpBrowserPage> {
       await sftp.downloadTo(
         entry.path,
         (bytes, chunk) {
-          if (_cancelRequested) throw const _TransferCancelled();
+          if (task.cancelRequested) throw const _TransferCancelled();
           sink.add(chunk);
           received = bytes;
         },
         onProgress: (bytesRead) {
-          if (!mounted) return;
-          setState(() => _transferDone = bytesRead);
+          TransferCenter.instance.update(task, done: bytesRead);
         },
       );
       await sink.flush();
       await sink.close();
       final finalPath = await DownloadHelper.finalize(tempPath, name);
+      TransferCenter.instance
+          .finish(task, TransferStatus.done, message: finalPath);
       if (!mounted) return;
-      setState(() => _transferName = null);
       _toast('已下载 $name（${_fmtSize(received)}）\n$finalPath');
     } on _TransferCancelled {
       await sink.close();
+      TransferCenter.instance.finish(task, TransferStatus.cancelled);
       if (!mounted) return;
-      setState(() => _transferName = null);
       _toast('已取消下载 $name');
     } catch (e) {
       await sink.close();
+      TransferCenter.instance
+          .finish(task, TransferStatus.failed, message: '$e');
       if (!mounted) return;
-      setState(() => _transferName = null);
       _toast(AppStrings.of(context).browserDownloadFailedTemplate.replaceAll('{msg}', '$e'));
     }
   }
@@ -317,6 +311,7 @@ class _SftpBrowserPageState extends State<SftpBrowserPage> {
   Future<void> _upload() async {
     final sftp = _sftp;
     if (sftp == null) return;
+    TransferTask? task;
     try {
       final picked = await FilePicker.pickFile();
       if (picked == null) return;
@@ -330,38 +325,39 @@ class _SftpBrowserPageState extends State<SftpBrowserPage> {
           : '$_path/${picked.name}';
       final localSize = await File(localPath).length();
       if (!mounted) return;
-      setState(() {
-        _transferName = picked.name;
-        _transferTotal = localSize;
-        _transferDone = 0;
-        _transferUpload = true;
-        _cancelRequested = false;
-      });
+      final started = TransferCenter.instance.start(
+        name: picked.name,
+        upload: true,
+        total: localSize,
+      );
+      task = started;
       // 流式上传：边读文件边写远端，大文件不会整份进内存
       await sftp.writeFile(
         target,
         localPath,
         onProgress: (sent, total) {
-          if (!mounted) return;
-          setState(() {
-            _transferDone = sent;
-            if (total > 0) _transferTotal = total;
-          });
+          TransferCenter.instance.update(started, done: sent, total: total);
         },
-        isCancelled: () => _cancelRequested,
+        isCancelled: () => started.cancelRequested,
       );
+      TransferCenter.instance
+          .finish(started, TransferStatus.done, message: target);
       if (!mounted) return;
-      setState(() => _transferName = null);
       _toast('已上传 ${picked.name}（${_fmtSize(localSize)}）');
       await _list(_path);
     } on SftpUploadCancelled {
+      if (task != null) {
+        TransferCenter.instance.finish(task, TransferStatus.cancelled);
+      }
       if (!mounted) return;
-      setState(() => _transferName = null);
       _toast(AppStrings.of(context).browserUploadCancelled);
       await _list(_path);
     } catch (e) {
+      if (task != null) {
+        TransferCenter.instance
+            .finish(task, TransferStatus.failed, message: '$e');
+      }
       if (!mounted) return;
-      setState(() => _transferName = null);
       _toast(AppStrings.of(context).browserUploadFailedTemplate.replaceAll('{msg}', '$e'));
     }
   }
@@ -475,20 +471,8 @@ class _SftpBrowserPageState extends State<SftpBrowserPage> {
       ),
       body: Column(
         children: [
-          // 传输进度固定在顶部，不随列表滚动
-          if (_transferName != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: _TransferCard(
-                name: _transferName!,
-                total: _transferTotal,
-                done: _transferDone,
-                upload: _transferUpload,
-                tokens: tokens,
-                text: text,
-                onCancel: () => setState(() => _cancelRequested = true),
-              ),
-            ),
+          // 传输进度固定在顶部，支持同时多个任务
+          const TransferPanel(),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
@@ -595,101 +579,6 @@ class _SftpBrowserPageState extends State<SftpBrowserPage> {
     _lastBackAt = now;
     if (!mounted) return;
     showGlassToast(context, '再按一次返回退出');
-  }
-}
-
-class _TransferCard extends StatelessWidget {
-  const _TransferCard({
-    required this.name,
-    required this.total,
-    required this.done,
-    required this.upload,
-    required this.tokens,
-    required this.text,
-    required this.onCancel,
-  });
-
-  final String name;
-  final int total;
-  final int done;
-  final bool upload;
-  final AppTokens tokens;
-  final TextTheme text;
-  final VoidCallback onCancel;
-
-  @override
-  Widget build(BuildContext context) {
-    final progress = total <= 0 ? null : (done / total).clamp(0.0, 1.0);
-    final percent = progress == null ? '' : '${(progress * 100).round()}%';
-    return GlassCard(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 8, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  upload ? Icons.upload_rounded : Icons.download_rounded,
-                  size: 16,
-                  color: tokens.accent,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    '${upload ? "上传" : "下载"} $name',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.bodySmall?.copyWith(color: tokens.textPrimary),
-                  ),
-                ),
-                Text(
-                  percent,
-                  style:
-                      text.labelSmall?.copyWith(color: tokens.textSecondary),
-                ),
-                IconButton(
-                  tooltip: '取消',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: onCancel,
-                  icon: Icon(Icons.close_rounded,
-                      size: 18, color: tokens.textSecondary),
-                ),
-              ],
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(100),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 5,
-                  backgroundColor: tokens.track,
-                  color: tokens.accent,
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '${_fmt(done)} / ${_fmt(total)}',
-              style: text.labelSmall?.copyWith(color: tokens.textSecondary),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _fmt(int bytes) {
-    if (bytes >= 1073741824) {
-      return '${(bytes / 1073741824).toStringAsFixed(2)} GB';
-    }
-    if (bytes >= 1048576) {
-      return '${(bytes / 1048576).toStringAsFixed(1)} MB';
-    }
-    if (bytes >= 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
-    return '$bytes B';
   }
 }
 
